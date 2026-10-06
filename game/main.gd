@@ -54,7 +54,6 @@ func _build_world() -> void:
 	ground.add_child(gc)
 	add_child(ground)
 
-‎	# مكعبات تجريبية (مباني مؤقتة)
 	for i in 12:
 		var b := StaticBody3D.new()
 		var mi := MeshInstance3D.new()
@@ -104,6 +103,7 @@ func _build_player() -> void:
 
 	cam = Camera3D.new()
 	add_child(cam)
+	cam.current = true
 
 
 func _build_ui() -> void:
@@ -113,6 +113,13 @@ func _build_ui() -> void:
 	ui.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.draw.connect(_draw_ui)
 	layer.add_child(ui)
+
+	var lbl := Label.new()
+	lbl.text = "Phase 1 OK"
+	lbl.position = Vector2(30, 20)
+	lbl.add_theme_font_size_override("font_size", 36)
+	layer.add_child(lbl)
+
 	add_child(layer)
 
 
