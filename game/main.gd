@@ -13,7 +13,7 @@ var model: Node3D
 var cam: Camera3D
 var ui: Control
 var cam_yaw := 0.0
-var cam_pitch := 0.45
+var cam_pitch := 0.85
 var stick_id := -1
 var look_id := -1
 var jump_id := -1
@@ -83,6 +83,7 @@ func _build_world() -> void:
 	e.sky = sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	e.ambient_light_energy = 0.6
 	e.fog_enabled = true
 	e.fog_light_color = Color(0.7, 0.8, 0.9)
 	e.fog_density = 0.004
@@ -92,6 +93,7 @@ func _build_world() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-50, 30, 0)
 	sun.shadow_enabled = true
+	sun.light_energy = 0.75
 	sun.directional_shadow_max_distance = 120.0
 	add_child(sun)
 
@@ -123,8 +125,8 @@ func _build_city() -> void:
 	var tex := ImageTexture.create_from_image(img)
 
 	var tints := [
-		Color(0.85, 0.8, 0.72), Color(0.7, 0.75, 0.8), Color(0.8, 0.6, 0.55),
-		Color(0.6, 0.7, 0.65), Color(0.75, 0.75, 0.78), Color(0.9, 0.85, 0.6)
+		Color(0.55, 0.5, 0.45), Color(0.4, 0.45, 0.5), Color(0.55, 0.38, 0.35),
+		Color(0.38, 0.48, 0.42), Color(0.45, 0.45, 0.48), Color(0.6, 0.55, 0.35)
 	]
 	var mats: Array[StandardMaterial3D] = []
 	for t in tints:
@@ -327,7 +329,7 @@ func _input(event: InputEvent) -> void:
 			stick_vec = (event.position - stick_origin).limit_length(RADIUS) / RADIUS
 		elif event.index == look_id:
 			cam_yaw -= event.relative.x * 0.005
-			cam_pitch = clampf(cam_pitch + event.relative.y * 0.004, 0.05, 1.2)
+			cam_pitch = clampf(cam_pitch + event.relative.y * 0.004, 0.25, 1.35)
 		ui.queue_redraw()
 
 
@@ -364,8 +366,8 @@ func _physics_process(delta: float) -> void:
 
 	_animate(delta, player.is_on_floor())
 
-	var tgt := player.position + Vector3(0, 1.6, 0)
-	var off := Vector3(0, 0, 9).rotated(Vector3.RIGHT, -cam_pitch).rotated(Vector3.UP, cam_yaw)
+	var tgt := player.position + Vector3(0, 1.8, 0)
+	var off := Vector3(0, 0, 10).rotated(Vector3.RIGHT, -cam_pitch).rotated(Vector3.UP, cam_yaw)
 	cam.position = cam.position.lerp(tgt + off, 1.0 - exp(-14.0 * delta))
 	cam.look_at(tgt)
 
