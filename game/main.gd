@@ -1,5 +1,6 @@
 extends Node3D
 
+# ===================== الملفات (كلها اختيارية) =====================
 const GLB_PATH := "res://game/character.glb"
 const GLB_YAW := PI
 const CHAR_HEIGHT := 1.8
@@ -13,11 +14,16 @@ const PED_GLB_COUNT := 6
 const PED_GLB_YAW := PI
 const WEAPON_GLB_DIR := "res://game/weapons/"
 const WEAPON_GLB_YAW := 0.0
+const BULLET_DIR := "res://game/bullets/"
+const BULLET_GLB_YAW := 0.0
+const BULLET_GLB_SPEED := 90.0
+const BULLET_LEN := 0.35
 const PHONE_GLB_PATH := "res://game/phone.glb"
 const PHONE_GLB_YAW := 0.0
+const ANIM_DIR := "res://game/anims/"
+const SND_DIR := "res://game/sounds/"
 const GUN_HAND_POS := Vector3(0.0, 0.08, 0.02)
 const GUN_HAND_ROT := Vector3(90.0, 0.0, 0.0)
-const ANIM_DIR := "res://game/anims/"
 const WEAPON_ANIM_TAGS := [[], ["pistol", "w1"], ["smg", "w2"], ["shotgun", "w3"], ["rifle", "w4"]]
 const ARM_POSE := [[0.0, 0.0, 0.0], [1.5, 0.2, 0.0], [1.45, 1.2, 0.08], [1.3, 1.0, 0.1], [1.55, 1.35, 0.12]]
 
@@ -39,10 +45,13 @@ const CAR_BRAKE := 32.0
 const WHEELBASE := 4.2
 const GAUGE_MAX := 220.0
 const MAP_HALF := 180.0
+const MINI_SIZE := 300.0
+const MINI_VIEW := 160.0
 
 const PED_COUNT := 24
 const MAX_STARS := 5
 const COP_MAX := 31.0
+const BULLET_SPEED := 260.0
 
 const WEAPON_FILES := ["", "pistol", "smg", "shotgun", "rifle"]
 const WEAPONS := [
@@ -54,6 +63,9 @@ const WEAPONS := [
 ]
 const MAG_SIZE := [0, 12, 30, 6, 30]
 const DEFAULT_RES := [0, 60, 180, 24, 120]
+const RECOIL := [0.0, 0.035, 0.012, 0.06, 0.02]
+const FLASH_SIZE := [0.0, 0.8, 1.0, 1.5, 1.2]
+const TRACER_COL := [Color.WHITE, Color(1.0, 0.85, 0.45), Color(1.0, 0.7, 0.3), Color(1.0, 0.9, 0.6), Color(1.0, 0.95, 0.7)]
 const APP_NAMES := ["MAP", "MY CAR", "GUNS", "TAXI"]
 
 
@@ -74,6 +86,7 @@ class Ped extends CharacterBody3D:
 	var arm_l: Node3D
 	var arm_r: Node3D
 	var anim: AnimationPlayer
+	var anims := {}
 	var a_walk := ""
 	var a_run := ""
 	var a_idle := ""
@@ -87,12 +100,13 @@ class Cop extends CharacterBody3D:
 	var path := PackedVector2Array()
 	var path_i := 0
 	var repath := 0.0
-	var shoot_cd := 1.0
 	var stuck_t := 0.0
 	var reverse_t := 0.0
 	var leave_t := 0.0
-	var has_officer := true
-	var officer: Node3D
+	var abandon_t := 0.0
+	var crew := 2
+	var outs: Array = []
+	var siren: AudioStreamPlayer3D
 	var mat_a: StandardMaterial3D
 	var mat_b: StandardMaterial3D
 
@@ -102,6 +116,7 @@ class Officer extends Ped:
 	var shoot_cd := 1.0
 	var leave_t := 0.0
 	var far_t := 0.0
+	var fire_t := 0.0
 	var aiming := false
 	var moving := false
 
@@ -118,15 +133,17 @@ var gun_visuals: Array[Node3D] = []
 var phone_node: Node3D
 var cam: Camera3D
 var ui: Control
+var mini_panel: Panel
 var mini: Control
 var big: Control
 var wheel: Control
 var phone: Control
 
 var cam_yaw := 0.0
-var cam_pitch := 0.85
-var aim_pitch := 0.3
+var cam_pitch := 0.18
+var aim_pitch := 0.1
 var aim_blend := 0.0
+var recoil := 0.0
 var stick_id := -1
 var look_id := -1
 var jump_id := -1
@@ -157,7 +174,15 @@ var fire_anim_t := 0.0
 var raise_t := 0.0
 var prev_armed := false
 var hand_bone_name := ""
-var anim_notes := ""
+var char_scale_dbg := ""
+var anim_files := 0
+var anim_total := 0
+var anim_kept := 0
+var dbg_anim_bone := ""
+var dbg_char_bone := ""
+var anim_src := {}
+var anim_cache := {}
+var bone_suffix_re := RegEx.new()
 
 var car: CharacterBody3D
 var car_visual: Node3D
@@ -197,7 +222,7 @@ var reloading := false
 var reload_t := 0.0
 var aim_t := 0.0
 var punch_t := 0.0
-var lock_node: Node3D
+var shot_count := 0
 
 var peds: Array[Ped] = []
 var cops: Array[Cop] = []
@@ -209,8 +234,24 @@ var spawn_t := 0.0
 var ped_spawn_t := 0.0
 
 var fx: Array[Dictionary] = []
-var tr_mat_p: StandardMaterial3D
 var tr_mat_c: StandardMaterial3D
+var tracer_mats: Array[StandardMaterial3D] = []
+var bullet_tmpl: Array[Node3D] = []
+var flash_mat: StandardMaterial3D
+var spark_mat: StandardMaterial3D
+var brass_mat: StandardMaterial3D
+var flash_cone: CylinderMesh
+var flash_core: SphereMesh
+var spark_mesh: SphereMesh
+var smoke_mesh: SphereMesh
+var casing_mesh: BoxMesh
+
+var sfx := {}
+var engine_snd: AudioStreamPlayer
+var skid_snd: AudioStreamPlayer
+var step_t := 0.0
+var scream_cd := 0.0
+var crash_cd := 0.0
 
 var ped_torso_mesh: BoxMesh
 var ped_head_mesh: SphereMesh
@@ -226,11 +267,18 @@ var ped_glbs: Array[String] = []
 var sb_body: StyleBoxFlat
 var sb_screen: StyleBoxFlat
 var sb_icons: Array[StyleBoxFlat] = []
+var sb_pill: StyleBoxFlat
+var sb_btn: StyleBoxFlat
+var sb_map: StyleBoxFlat
 
 
 func _ready() -> void:
 	randomize()
+	bone_suffix_re.compile("[_.]\\d+$")
 	_init_assets()
+	_load_anim_sources()
+	_build_sounds()
+	_build_bullet_templates()
 	_build_world()
 	_build_city()
 	_build_player()
@@ -240,9 +288,14 @@ func _ready() -> void:
 	_set_weapon(1, false)
 	for i in PED_COUNT:
 		_spawn_ped()
-	var hb := hand_bone_name if hand_bone_name != "" else "NOT FOUND"
-	var an := anim_notes if anim_notes != "" else "none"
-	_toast("HAND: %s  |  ANIMS: %s" % [hb, an], 9.0)
+	var l1 := "HAND: %s | %s" % [hand_bone_name if hand_bone_name != "" else "NOT FOUND", char_scale_dbg]
+	var keys := ", ".join(PackedStringArray(weapon_anims.keys()))
+	if keys.length() > 60:
+		keys = keys.substr(0, 60) + "..."
+	var lines: Array[String] = [l1, "ANIM FILES: %d | TRACKS: %d/%d" % [anim_files, anim_kept, anim_total], "KEYS: " + keys]
+	if anim_total > 0 and anim_kept * 2 < anim_total:
+		lines.append("ANIM BONE: %s | CHAR BONE: %s" % [dbg_anim_bone, dbg_char_bone])
+	_toast("\n".join(PackedStringArray(lines)), 12.0)
 
 
 # ---------------------------------------------------------------- helpers
@@ -256,6 +309,15 @@ func _mat(c: Color) -> StandardMaterial3D:
 func _unshaded(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = c
+	return m
+
+
+func _additive(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	m.albedo_color = c
 	return m
 
@@ -281,12 +343,12 @@ func _wpn_center() -> Vector2:
 
 
 func _phone_btn_center() -> Vector2:
-	return Vector2(95, 270)
+	return Vector2(100, 110)
 
 
 func _mini_rect() -> Rect2:
 	var s := _vp()
-	return Rect2(s.x - 310.0, 24.0, 280.0, 280.0)
+	return Rect2(s.x - MINI_SIZE - 40.0, 40.0, MINI_SIZE, MINI_SIZE)
 
 
 func _big_rect() -> Rect2:
@@ -426,9 +488,31 @@ func _snap_to_road(w: Vector2) -> Vector2:
 	return Vector2(clampf(w.x, -ROAD_MAX, ROAD_MAX), rz)
 
 
+func _first(list: Array) -> String:
+	for s in list:
+		if String(s) != "":
+			return String(s)
+	return ""
+
+
 func _init_assets() -> void:
-	tr_mat_p = _unshaded(Color(1.0, 0.9, 0.4))
-	tr_mat_c = _unshaded(Color(1.0, 0.4, 0.2))
+	tr_mat_c = _additive(Color(1.0, 0.45, 0.25))
+	for i in WEAPONS.size():
+		tracer_mats.append(_additive(TRACER_COL[i]))
+	flash_mat = _additive(Color(1.0, 0.8, 0.45, 0.95))
+	spark_mat = _additive(Color(1.0, 0.8, 0.35))
+	brass_mat = _mat(Color(0.85, 0.65, 0.2))
+	brass_mat.metallic = 0.9
+	brass_mat.roughness = 0.3
+	flash_cone = CylinderMesh.new()
+	flash_cone.top_radius = 0.0
+	flash_cone.bottom_radius = 0.08
+	flash_cone.height = 0.3
+	flash_core = _spherem(0.07)
+	spark_mesh = _spherem(0.022)
+	smoke_mesh = _spherem(0.07)
+	casing_mesh = _boxm(Vector3(0.016, 0.016, 0.055))
+
 	ped_torso_mesh = _boxm(Vector3(0.42, 0.6, 0.24))
 	ped_head_mesh = _spherem(0.13)
 	ped_leg_mesh = _boxm(Vector3(0.16, 0.85, 0.18))
@@ -463,6 +547,28 @@ func _init_assets() -> void:
 		sb.bg_color = c
 		sb.set_corner_radius_all(36)
 		sb_icons.append(sb)
+	sb_pill = StyleBoxFlat.new()
+	sb_pill.bg_color = Color(0.05, 0.06, 0.08, 0.7)
+	sb_pill.set_corner_radius_all(22)
+	sb_pill.border_color = Color(1, 1, 1, 0.8)
+	sb_pill.set_border_width_all(2)
+	sb_btn = StyleBoxFlat.new()
+	sb_btn.bg_color = Color(1, 1, 1, 0.12)
+	sb_btn.set_corner_radius_all(26)
+	sb_btn.border_color = Color(1, 1, 1, 0.9)
+	sb_btn.set_border_width_all(3)
+	sb_map = StyleBoxFlat.new()
+	sb_map.bg_color = Color(0.05, 0.06, 0.08, 0.96)
+	sb_map.set_corner_radius_all(28)
+	sb_map.border_color = Color(1, 1, 1, 0.9)
+	sb_map.set_border_width_all(4)
+
+
+func _build_bullet_templates() -> void:
+	bullet_tmpl.append(null)
+	for i in range(1, WEAPONS.size()):
+		var path := BULLET_DIR + String(WEAPON_FILES[i]) + ".glb"
+		bullet_tmpl.append(_fit_glb(path, BULLET_GLB_YAW, BULLET_LEN, false, false))
 
 
 # ---------------------------------------------------------------- glb helpers
@@ -526,6 +632,40 @@ func _find_skeleton(n: Node) -> Skeleton3D:
 	return null
 
 
+func _bone_range(sk: Skeleton3D, holder: Node3D) -> Vector2:
+	var xf := Transform3D.IDENTITY
+	var n: Node = sk
+	var stop := holder.get_parent()
+	while n != null and n != stop:
+		if n is Node3D:
+			xf = (n as Node3D).transform * xf
+		n = n.get_parent()
+	var mn := 1e9
+	var mx := -1e9
+	for i in sk.get_bone_count():
+		var y := (xf * sk.get_bone_global_rest(i).origin).y
+		mn = minf(mn, y)
+		mx = maxf(mx, y)
+	return Vector2(mn, mx)
+
+
+func _fit_by_bones(holder: Node3D, sk: Skeleton3D, target_h: float) -> void:
+	if sk == null:
+		return
+	var pad := 1.07
+	for i in sk.get_bone_count():
+		var l := sk.get_bone_name(i).to_lower()
+		if l.contains("headtop") or l.contains("head_end") or l.contains("headend"):
+			pad = 1.0
+	var mm := _bone_range(sk, holder)
+	var h := mm.y - mm.x
+	if h < 0.0001:
+		return
+	holder.scale *= target_h / (h * pad)
+	var mm2 := _bone_range(sk, holder)
+	holder.position.y -= mm2.x
+
+
 func _find_hand_bone(sk: Skeleton3D) -> String:
 	for i in sk.get_bone_count():
 		var n := sk.get_bone_name(i)
@@ -554,34 +694,14 @@ func _set_loop(ap: AnimationPlayer, n: String) -> void:
 		ap.get_animation(n).loop_mode = Animation.LOOP_LINEAR
 
 
-func _setup_anim(p: Ped, root: Node) -> void:
-	p.anim = root.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	if p.anim == null:
-		return
-	p.a_walk = _find_anim(p.anim, ["walk"])
-	p.a_run = _find_anim(p.anim, ["run", "sprint", "jog"])
-	p.a_idle = _find_anim(p.anim, ["idle", "stand"])
-	if p.a_run == "":
-		p.a_run = p.a_walk
-	_set_loop(p.anim, p.a_walk)
-	_set_loop(p.anim, p.a_run)
-	_set_loop(p.anim, p.a_idle)
-
-
-func _ped_play(p: Ped, want: String) -> void:
-	if p.anim == null or want == "" or want == p.a_cur:
-		return
-	p.a_cur = want
-	p.anim.play(want, 0.2)
-
-
-# ---------------------------------------------------------------- external animations
+# ---------------------------------------------------------------- animations (FBX / GLB files)
 
 func _norm_bone(n: String) -> String:
 	var l := n.to_lower()
 	if l.contains(":"):
 		l = l.get_slice(":", l.get_slice_count(":") - 1)
 	l = l.replace("mixamorig", "")
+	l = bone_suffix_re.sub(l, "")
 	var out := ""
 	for ch in l:
 		if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9"):
@@ -619,45 +739,12 @@ func _anim_parse(low: String) -> Array:
 	return [widx, base]
 
 
-func _wa(w: int, base: String) -> String:
-	return String(weapon_anims.get("%d_%s" % [w, base], ""))
-
-
-func _any(base: String) -> String:
-	for i in range(1, WEAPONS.size()):
-		var n := _wa(i, base)
-		if n != "":
-			return n
-	return ""
-
-
-func _first(list: Array) -> String:
-	for s in list:
-		if String(s) != "":
-			return String(s)
-	return ""
-
-
-func _load_external_anims() -> void:
-	if anim_player == null or char_skeleton == null:
+func _load_anim_sources() -> void:
+	var da := DirAccess.open(ANIM_DIR)
+	if da == null:
 		return
-	if not DirAccess.dir_exists_absolute(ANIM_DIR):
-		return
-	if not anim_player.has_animation_library(""):
-		anim_player.add_animation_library("", AnimationLibrary.new())
-	var lib := anim_player.get_animation_library("")
-	var root := anim_player.get_node(anim_player.root_node)
-	var sk_path := str(root.get_path_to(char_skeleton))
-	var bone_map := {}
-	for i in char_skeleton.get_bone_count():
-		var bn := char_skeleton.get_bone_name(i)
-		bone_map[_norm_bone(bn)] = bn
-
 	var seen := {}
-	var kept := 0
-	var total := 0
-	var keys: Array = []
-	for f in DirAccess.get_files_at(ANIM_DIR):
+	for f in da.get_files():
 		var fn := String(f)
 		if fn.ends_with(".import"):
 			fn = fn.trim_suffix(".import")
@@ -673,69 +760,501 @@ func _load_external_anims() -> void:
 		if parsed.is_empty():
 			continue
 		var key := "%d_%s" % [parsed[0], parsed[1]]
-		if weapon_anims.has(key):
+		if anim_src.has(key):
 			continue
 		var scn := load(ANIM_DIR + fn) as PackedScene
 		if scn == null:
 			continue
 		var inst := scn.instantiate()
 		var src := inst.find_child("AnimationPlayer", true, false) as AnimationPlayer
-		if src == null:
-			inst.free()
-			continue
-		var best: Animation = null
-		for n in src.get_animation_list():
-			if String(n) == "RESET":
-				continue
-			var a := src.get_animation(n)
-			if best == null or a.length > best.length:
-				best = a
-		if best == null:
-			inst.free()
-			continue
-		var anim := best.duplicate() as Animation
+		if src != null:
+			var best: Animation = null
+			for n in src.get_animation_list():
+				if String(n) == "RESET":
+					continue
+				var a := src.get_animation(n)
+				if best == null or a.length > best.length:
+					best = a
+			if best != null:
+				anim_src[key] = best
+				anim_files += 1
 		inst.free()
-		total += anim.get_track_count()
-		for t in range(anim.get_track_count() - 1, -1, -1):
+
+
+func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String) -> Dictionary:
+	var result := {}
+	if sk == null or anim_src.is_empty():
+		return result
+	if not ap.has_animation_library(""):
+		ap.add_animation_library("", AnimationLibrary.new())
+	var lib := ap.get_animation_library("")
+	if anim_cache.has(ckey):
+		var cached: Dictionary = anim_cache[ckey]
+		for k in cached.keys():
+			lib.add_animation("x_" + String(k), cached[k])
+			result[k] = "x_" + String(k)
+		return result
+
+	var base := ap.get_node(ap.root_node)
+	var sk_path := str(base.get_path_to(sk))
+	var bone_map := {}
+	for i in sk.get_bone_count():
+		var bn := sk.get_bone_name(i)
+		bone_map[_norm_bone(bn)] = bn
+		if i == 1:
+			dbg_char_bone = bn
+	var store := {}
+	for k in anim_src.keys():
+		var anim := (anim_src[k] as Animation).duplicate() as Animation
+		var tot := anim.get_track_count()
+		for t in range(tot - 1, -1, -1):
 			var ttype := anim.track_get_type(t)
 			var tp := anim.track_get_path(t)
 			if ttype != Animation.TYPE_ROTATION_3D or tp.get_subname_count() == 0:
 				anim.remove_track(t)
 				continue
-			var nb := _norm_bone(tp.get_subname(0))
+			var raw := tp.get_subname(0)
+			var nb := _norm_bone(raw)
 			if not bone_map.has(nb):
+				if ckey == "player":
+					dbg_anim_bone = raw
 				anim.remove_track(t)
 				continue
 			anim.track_set_path(t, NodePath(sk_path + ":" + String(bone_map[nb])))
-		kept += anim.get_track_count()
-		var looped := String(parsed[1]) in ["idle", "aim", "walk", "run"]
+		var base_name := String(k).get_slice("_", 1)
+		var looped := base_name in ["idle", "aim", "walk", "run"]
 		anim.loop_mode = Animation.LOOP_LINEAR if looped else Animation.LOOP_NONE
-		var aname := "x_" + key
+		var aname := "x_" + String(k)
 		lib.add_animation(aname, anim)
-		weapon_anims[key] = aname
-		keys.append(key)
+		store[k] = anim
+		result[k] = aname
+		if ckey == "player":
+			anim_total += tot
+			anim_kept += anim.get_track_count()
+	anim_cache[ckey] = store
+	return result
 
-	var g := _wa(0, "idle")
-	if g != "":
-		a_idle = g
-	g = _wa(0, "walk")
-	if g != "":
-		a_walk = g
-	g = _wa(0, "run")
-	if g != "":
-		a_run = g
-	g = _wa(0, "jump")
-	if g != "":
-		a_jump = g
-	g = _wa(0, "aim")
-	if g != "":
-		a_aim = g
-	if a_run == "":
-		a_run = a_walk
-	if keys.is_empty():
-		anim_notes = "none (0/%d)" % total
+
+func _wa(w: int, base: String) -> String:
+	return String(weapon_anims.get("%d_%s" % [w, base], ""))
+
+
+func _any(base: String) -> String:
+	for i in range(1, WEAPONS.size()):
+		var n := _wa(i, base)
+		if n != "":
+			return n
+	return ""
+
+
+func _wx(w: int, base: String) -> String:
+	return _first([_wa(w, base), _any(base)])
+
+
+func _setup_anim(p: Ped, root: Node3D, ckey: String) -> void:
+	var sk := _find_skeleton(root)
+	_fit_by_bones(root, sk, 1.8)
+	p.anim = root.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if p.anim == null and sk != null:
+		p.anim = AnimationPlayer.new()
+		root.add_child(p.anim)
+	if p.anim == null:
+		return
+	p.a_walk = _find_anim(p.anim, ["walk"])
+	p.a_run = _find_anim(p.anim, ["run", "sprint", "jog"])
+	p.a_idle = _find_anim(p.anim, ["idle", "stand"])
+	_set_loop(p.anim, p.a_walk)
+	_set_loop(p.anim, p.a_run)
+	_set_loop(p.anim, p.a_idle)
+	var res := _retarget(p.anim, sk, ckey)
+	if not res.is_empty():
+		p.anims = res
+		var g := String(res.get("0_idle", ""))
+		if g != "":
+			p.a_idle = g
+		g = String(res.get("0_walk", ""))
+		if g != "":
+			p.a_walk = g
+		g = String(res.get("0_run", ""))
+		if g != "":
+			p.a_run = g
+	if p.a_run == "":
+		p.a_run = p.a_walk
+
+
+func _ped_play(p: Ped, want: String) -> void:
+	if p.anim == null or want == "" or want == p.a_cur:
+		return
+	p.a_cur = want
+	p.anim.play(want, 0.2)
+
+
+# ---------------------------------------------------------------- sounds (synth + optional files)
+
+func _wav(samples: PackedFloat32Array, rate: int, loop: bool) -> AudioStreamWAV:
+	var w := AudioStreamWAV.new()
+	w.format = AudioStreamWAV.FORMAT_16_BITS
+	w.mix_rate = rate
+	w.stereo = false
+	var bytes := PackedByteArray()
+	bytes.resize(samples.size() * 2)
+	for i in samples.size():
+		bytes.encode_s16(i * 2, int(clampf(samples[i], -1.0, 1.0) * 30000.0))
+	w.data = bytes
+	if loop:
+		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		w.loop_begin = 0
+		w.loop_end = samples.size()
+	return w
+
+
+func _synth_shot(dur: float, vol: float, cutoff: float, dscale: float) -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(dur * rate)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	var a := clampf(cutoff / float(rate) * 2.0, 0.02, 0.95)
+	for i in n:
+		var t := float(i) / rate
+		var noise := randf() * 2.0 - 1.0
+		lp += (noise - lp) * a
+		var env := exp(-t / (dur * dscale))
+		var thump := sin(TAU * 70.0 * t) * exp(-t * 18.0) * 0.8
+		var crack := noise * exp(-t * 90.0) * 0.6
+		s[i] = (lp * env * 1.3 + thump + crack) * vol
+	return _wav(s, rate, false)
+
+
+func _synth_step() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.13 * rate)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		lp += ((randf() * 2.0 - 1.0) - lp) * 0.18
+		s[i] = (lp * exp(-t * 38.0) * 0.9 + sin(TAU * 95.0 * t) * exp(-t * 45.0) * 0.5) * 0.7
+	return _wav(s, rate, false)
+
+
+func _synth_crash() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.7 * rate)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		lp += ((randf() * 2.0 - 1.0) - lp) * 0.35
+		var ring := sin(TAU * 310.0 * t) * 0.25 + sin(TAU * 437.0 * t) * 0.2
+		s[i] = (lp * exp(-t * 7.0) * 1.1 + sin(TAU * 52.0 * t) * exp(-t * 9.0) + ring * exp(-t * 6.0)) * 0.8
+	return _wav(s, rate, false)
+
+
+func _synth_scream() -> AudioStreamWAV:
+	var rate := 22050
+	var dur := 0.8
+	var n := int(dur * rate)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var f := 620.0 + 380.0 * sin(t * 5.0) + 260.0 * t
+		ph += TAU * f / rate
+		var env := pow(sin(PI * t / dur), 0.6)
+		var v := sin(ph) + 0.5 * sin(ph * 2.0) + 0.3 * sin(ph * 3.0) + (randf() * 2.0 - 1.0) * 0.12
+		s[i] = v * env * 0.3
+	return _wav(s, rate, false)
+
+
+func _synth_siren() -> AudioStreamWAV:
+	var rate := 22050
+	var dur := 1.6
+	var n := int(dur * rate)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var ph := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var f := 760.0 + 420.0 * (0.5 - 0.5 * cos(TAU * t / dur))
+		ph += TAU * f / rate
+		s[i] = (sin(ph) + 0.35 * sin(ph * 3.0) + 0.15 * sin(ph * 5.0)) * 0.3
+	return _wav(s, rate, true)
+
+
+func _synth_engine() -> AudioStreamWAV:
+	var rate := 22050
+	var n := rate
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var v := 0.0
+		for k in range(1, 7):
+			v += sin(TAU * 55.0 * float(k) * t) / float(k)
+		lp += ((randf() * 2.0 - 1.0) - lp) * 0.1
+		var am := 0.75 + 0.25 * sin(TAU * 11.0 * t)
+		s[i] = (v * 0.28 * am + lp * 0.07)
+	return _wav(s, rate, true)
+
+
+func _synth_skid() -> AudioStreamWAV:
+	var rate := 22050
+	var n := rate
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var x := randf() * 2.0 - 1.0
+		lp += (x - lp) * 0.25
+		s[i] = (x - lp) * 0.35
+	return _wav(s, rate, true)
+
+
+func _synth_click(count: int) -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.55 * rate)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for c in count:
+		var start := int(float(c) * 0.28 * rate)
+		for i in range(0, int(0.02 * rate)):
+			if start + i < n:
+				s[start + i] = (randf() * 2.0 - 1.0) * exp(-float(i) / (0.004 * rate)) * 0.8
+	return _wav(s, rate, false)
+
+
+func _synth_radio() -> AudioStreamWAV:
+	var rate := 22050
+	var n := int(0.4 * rate)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var t := float(i) / rate
+		var f := 1250.0 if t < 0.12 else (900.0 if t < 0.24 else 0.0)
+		var tone := sin(TAU * f * t) * 0.35 if f > 0.0 else 0.0
+		s[i] = tone + (randf() * 2.0 - 1.0) * 0.06 * exp(-t * 4.0)
+	return _wav(s, rate, false)
+
+
+func _make_loop(s: AudioStream) -> void:
+	if s is AudioStreamWAV:
+		var w := s as AudioStreamWAV
+		w.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		w.loop_begin = 0
+		w.loop_end = int(w.get_length() * float(w.mix_rate))
+	elif s is AudioStreamOggVorbis:
+		(s as AudioStreamOggVorbis).loop = true
+	elif s is AudioStreamMP3:
+		(s as AudioStreamMP3).loop = true
+
+
+func _load_sound_file(key: String) -> AudioStream:
+	for ext in ["ogg", "wav", "mp3"]:
+		var p := "%s%s.%s" % [SND_DIR, key, ext]
+		if ResourceLoader.exists(p):
+			var s := load(p) as AudioStream
+			if s != null:
+				if key in ["engine", "siren", "skid"]:
+					_make_loop(s)
+				return s
+	return null
+
+
+func _build_sounds() -> void:
+	sfx["pistol"] = _synth_shot(0.28, 0.9, 1800.0, 0.35)
+	sfx["smg"] = _synth_shot(0.18, 0.8, 2600.0, 0.5)
+	sfx["shotgun"] = _synth_shot(0.55, 1.0, 900.0, 0.2)
+	sfx["rifle"] = _synth_shot(0.4, 1.0, 1400.0, 0.25)
+	sfx["step"] = _synth_step()
+	sfx["crash"] = _synth_crash()
+	sfx["scream"] = _synth_scream()
+	sfx["siren"] = _synth_siren()
+	sfx["engine"] = _synth_engine()
+	sfx["skid"] = _synth_skid()
+	sfx["reload"] = _synth_click(2)
+	sfx["radio"] = _synth_radio()
+	for k in sfx.keys():
+		var f := _load_sound_file(String(k))
+		if f != null:
+			sfx[k] = f
+	engine_snd = AudioStreamPlayer.new()
+	engine_snd.stream = sfx["engine"]
+	engine_snd.volume_db = -80.0
+	add_child(engine_snd)
+	skid_snd = AudioStreamPlayer.new()
+	skid_snd.stream = sfx["skid"]
+	skid_snd.volume_db = -12.0
+	add_child(skid_snd)
+
+
+func _sfx3d(key: String, pos: Vector3, vol_db: float = 0.0, pitch: float = 1.0, maxd: float = 140.0) -> void:
+	if not sfx.has(key):
+		return
+	var p := AudioStreamPlayer3D.new()
+	p.stream = sfx[key]
+	p.volume_db = vol_db
+	p.pitch_scale = pitch
+	p.max_distance = maxd
+	p.unit_size = 12.0
+	add_child(p)
+	p.global_position = pos
+	p.finished.connect(p.queue_free)
+	p.play()
+
+
+func _update_car_audio(delta: float, throttle: float, hb: bool, prev_speed: float) -> void:
+	crash_cd = maxf(crash_cd - delta, 0.0)
+	scream_cd = maxf(scream_cd - delta, 0.0)
+	if in_car and engine_snd.stream != null:
+		if not engine_snd.playing:
+			engine_snd.play()
+		var r := clampf(absf(car_speed) / CAR_MAX, 0.0, 1.0)
+		engine_snd.pitch_scale = 0.65 + r * 1.9 + absf(throttle) * 0.15
+		engine_snd.volume_db = -13.0 + absf(throttle) * 5.0 + r * 3.0
+	elif engine_snd.playing:
+		engine_snd.stop()
+	var want_skid := in_car and hb and absf(car_speed) > 10.0
+	if want_skid and not skid_snd.playing and skid_snd.stream != null:
+		skid_snd.play()
+	elif not want_skid and skid_snd.playing:
+		skid_snd.stop()
+	if prev_speed - car_speed > 9.0 and absf(prev_speed) > 10.0 and crash_cd <= 0.0:
+		crash_cd = 0.8
+		_sfx3d("crash", car.position, 2.0, randf_range(0.9, 1.1), 160.0)
+
+
+# ---------------------------------------------------------------- effects
+
+func _fx_add(n: Node3D, life: float, g: float = 0.0, v: Vector3 = Vector3.ZERO, grav: float = 0.0, mat: StandardMaterial3D = null, a0: float = 1.0, spin: Vector3 = Vector3.ZERO, on_floor: bool = false) -> void:
+	fx.append({"n": n, "t": life, "life": maxf(life, 0.001), "g": g, "v": v, "grav": grav, "mat": mat, "a0": a0, "spin": spin, "floor": on_floor})
+
+
+func _update_fx(delta: float) -> void:
+	for i in range(fx.size() - 1, -1, -1):
+		var f: Dictionary = fx[i]
+		var n: Node3D = f["n"]
+		if not is_instance_valid(n):
+			fx.remove_at(i)
+			continue
+		f["t"] = float(f["t"]) - delta
+		var v: Vector3 = f["v"]
+		var grav := float(f["grav"])
+		if v != Vector3.ZERO or grav != 0.0:
+			v.y -= grav * delta
+			f["v"] = v
+			n.position += v * delta
+		var g := float(f["g"])
+		if g > 0.0:
+			n.scale += Vector3.ONE * g * delta
+		var spin: Vector3 = f["spin"]
+		if spin != Vector3.ZERO:
+			n.rotation += spin * delta
+		var m = f["mat"]
+		if m != null:
+			var c: Color = (m as StandardMaterial3D).albedo_color
+			c.a = float(f["a0"]) * clampf(float(f["t"]) / float(f["life"]), 0.0, 1.0)
+			(m as StandardMaterial3D).albedo_color = c
+		var dead_fx := float(f["t"]) <= 0.0
+		if bool(f["floor"]) and n.position.y < 0.03:
+			dead_fx = true
+		if dead_fx:
+			n.queue_free()
+			fx.remove_at(i)
+
+
+func _tracer(from: Vector3, to: Vector3, widx: int, player_shot: bool) -> void:
+	var d := to - from
+	var l := d.length()
+	if l < 0.05:
+		return
+	var dir := d / l
+	var mi: Node3D
+	var spd := BULLET_SPEED
+	if player_shot and widx > 0 and bullet_tmpl[widx] != null:
+		mi = bullet_tmpl[widx].duplicate() as Node3D
+		spd = BULLET_GLB_SPEED
 	else:
-		anim_notes = ", ".join(PackedStringArray(keys)) + " (%d/%d)" % [kept, total]
+		var m := MeshInstance3D.new()
+		m.mesh = _boxm(Vector3(0.03, 0.03, 1.2 if widx != 3 else 0.7))
+		m.material_override = tracer_mats[widx] if player_shot else tr_mat_c
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi = m
+	add_child(mi)
+	mi.global_position = from
+	var up := Vector3.UP
+	if absf(dir.y) > 0.98:
+		up = Vector3.RIGHT
+	mi.look_at(from + dir, up)
+	_fx_add(mi, maxf(l / spd, 0.03), 0.0, dir * spd)
+
+
+func _muzzle_flash(pos: Vector3, dir: Vector3, size: float) -> void:
+	var n := Node3D.new()
+	add_child(n)
+	n.global_position = pos
+	var up := Vector3.UP
+	if absf(dir.y) > 0.98:
+		up = Vector3.RIGHT
+	n.look_at(pos + dir, up)
+	n.scale = Vector3.ONE * size
+	var cone := MeshInstance3D.new()
+	cone.mesh = flash_cone
+	cone.material_override = flash_mat
+	cone.rotation_degrees = Vector3(-90, 0, 0)
+	cone.position = Vector3(0, 0, -0.15)
+	cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	n.add_child(cone)
+	var core := MeshInstance3D.new()
+	core.mesh = flash_core
+	core.material_override = flash_mat
+	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	n.add_child(core)
+	_fx_add(n, 0.05)
+
+
+func _smoke(pos: Vector3, dir: Vector3, size: float, alpha: float) -> void:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(0.75, 0.75, 0.78, alpha)
+	var mi := MeshInstance3D.new()
+	mi.mesh = smoke_mesh
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	mi.global_position = pos
+	mi.scale = Vector3.ONE * size
+	_fx_add(mi, 0.7, size * 3.0, dir * 0.8 + Vector3(0, 0.5, 0), 0.0, m, alpha)
+
+
+func _eject_casing(pos: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = casing_mesh
+	mi.material_override = brass_mat
+	add_child(mi)
+	mi.global_position = pos
+	var right := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
+	var v := right * randf_range(1.5, 3.0) + Vector3(0, randf_range(2.0, 3.5), 0)
+	_fx_add(mi, 1.5, 0.0, v, 14.0, null, 1.0, Vector3(randf_range(-20, 20), randf_range(-20, 20), randf_range(-20, 20)), true)
+
+
+func _impact(pos: Vector3, normal: Vector3, soft: bool) -> void:
+	var count := 2 if soft else 4
+	for i in count:
+		var mi := MeshInstance3D.new()
+		mi.mesh = spark_mesh
+		mi.material_override = spark_mat
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mi)
+		mi.global_position = pos
+		var v := normal * randf_range(2.0, 4.0) + Vector3(randf_range(-2, 2), randf_range(0.5, 2.5), randf_range(-2, 2))
+		_fx_add(mi, 0.25, 0.0, v, 12.0)
+	_smoke(pos + normal * 0.1, normal, 0.05 if soft else 0.09, 0.45)
 
 
 # ---------------------------------------------------------------- world
@@ -845,7 +1364,7 @@ func _build_marker() -> void:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.albedo_color = Color(1.0, 0.6, 0.1, 0.35)
+	m.albedo_color = Color(0.78, 0.35, 1.0, 0.35)
 	dest_marker.material_override = m
 	dest_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	dest_marker.visible = false
@@ -877,7 +1396,7 @@ func _build_player() -> void:
 
 	cam = Camera3D.new()
 	cam.far = 600.0
-	cam.position = Vector3(0, 6, 9)
+	cam.position = Vector3(0, 3, 6)
 	add_child(cam)
 	cam.current = true
 
@@ -915,10 +1434,13 @@ func _build_glb() -> void:
 	if holder == null:
 		_build_rig()
 		return
-	if CHAR_SCALE_MANUAL > 0.0:
-		holder.scale = Vector3.ONE * CHAR_SCALE_MANUAL
 	model.add_child(holder)
 	char_skeleton = _find_skeleton(holder)
+	if CHAR_SCALE_MANUAL > 0.0:
+		holder.scale = Vector3.ONE * CHAR_SCALE_MANUAL
+	else:
+		_fit_by_bones(holder, char_skeleton, CHAR_HEIGHT)
+	char_scale_dbg = "SCALE %.4f" % holder.scale.x
 	anim_player = holder.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if anim_player == null and char_skeleton != null:
 		anim_player = AnimationPlayer.new()
@@ -930,11 +1452,26 @@ func _build_glb() -> void:
 	a_run = _find_anim(anim_player, ["run", "sprint", "jog"])
 	a_jump = _find_anim(anim_player, ["jump", "fall"])
 	a_aim = _find_anim(anim_player, ["aim", "shoot", "fire", "pistol", "rifle", "gun"])
-	if a_run == "":
-		a_run = a_walk
 	for n in [a_idle, a_walk, a_run, a_aim]:
 		_set_loop(anim_player, n)
-	_load_external_anims()
+	weapon_anims = _retarget(anim_player, char_skeleton, "player")
+	var g := _wa(0, "idle")
+	if g != "":
+		a_idle = g
+	g = _wa(0, "walk")
+	if g != "":
+		a_walk = g
+	g = _wa(0, "run")
+	if g != "":
+		a_run = g
+	g = _wa(0, "jump")
+	if g != "":
+		a_jump = g
+	g = _wa(0, "aim")
+	if g != "":
+		a_aim = g
+	if a_run == "":
+		a_run = a_walk
 
 
 func _attach_holdables() -> void:
@@ -1109,18 +1646,27 @@ func _make_cop() -> Cop:
 		if lights.size() >= 2:
 			c.mat_a = lights[0]
 			c.mat_b = lights[1]
+	if sfx.has("siren"):
+		c.siren = AudioStreamPlayer3D.new()
+		c.siren.stream = sfx["siren"]
+		c.siren.max_distance = 220.0
+		c.siren.unit_size = 25.0
+		c.siren.volume_db = -4.0
+		c.add_child(c.siren)
 	return c
 
 
 # ---------------------------------------------------------------- peds
 
-func _build_ped_visual(p: Ped, shirt: Material, skin: Material, pants: Material) -> void:
+func _build_ped_visual(p: Ped, shirt: Material, skin: Material, pants: Material, gun: bool) -> void:
 	_part(p, ped_torso_mesh, Vector3(0, 1.15, 0), shirt)
 	_part(p, ped_head_mesh, Vector3(0, 1.62, 0), skin)
 	p.leg_l = _pivot_mesh(p, Vector3(-0.1, 0.85, 0), ped_leg_mesh, 0.425, pants)
 	p.leg_r = _pivot_mesh(p, Vector3(0.1, 0.85, 0), ped_leg_mesh, 0.425, pants)
 	p.arm_l = _pivot_mesh(p, Vector3(-0.28, 1.4, 0), ped_arm_mesh, 0.275, shirt)
 	p.arm_r = _pivot_mesh(p, Vector3(0.28, 1.4, 0), ped_arm_mesh, 0.275, shirt)
+	if gun:
+		_part(p.arm_r, _boxm(Vector3(0.06, 0.1, 0.28)), Vector3(0, -0.55, -0.12), _mat(Color(0.08, 0.08, 0.1)))
 
 
 func _ped_capsule(p: Ped) -> void:
@@ -1143,11 +1689,11 @@ func _make_ped() -> Ped:
 		var h := _fit_glb(path, PED_GLB_YAW, 1.8, true, true)
 		if h != null:
 			p.add_child(h)
-			_setup_anim(p, h)
+			_setup_anim(p, h, "ped:" + path)
 			return p
 	var shirt: StandardMaterial3D = shirt_mats[randi() % shirt_mats.size()]
 	var skin: StandardMaterial3D = skin_mats[randi() % skin_mats.size()]
-	_build_ped_visual(p, shirt, skin, pant_mat)
+	_build_ped_visual(p, shirt, skin, pant_mat, false)
 	return p
 
 
@@ -1225,6 +1771,9 @@ func _update_peds(delta: float) -> void:
 func _alarm(pos: Vector3, radius: float) -> void:
 	for p in peds:
 		if not p.dead and p.position.distance_to(pos) < radius:
+			if p.panic <= 0.0 and scream_cd <= 0.0:
+				scream_cd = 0.6
+				_sfx3d("scream", p.position + Vector3(0, 1.5, 0), -2.0, randf_range(0.8, 1.3), 90.0)
 			p.panic = maxf(p.panic, 6.0)
 
 
@@ -1264,26 +1813,33 @@ func _make_officer() -> Officer:
 	var h := _fit_glb(OFFICER_GLB_PATH, PED_GLB_YAW, 1.8, true, true)
 	if h != null:
 		o.add_child(h)
-		_setup_anim(o, h)
+		_setup_anim(o, h, "officer")
 	else:
-		_build_ped_visual(o, off_shirt, skin_mats[0], off_pants)
+		_build_ped_visual(o, off_shirt, skin_mats[0], off_pants, true)
 	return o
 
 
-func _spawn_officer(c: Cop) -> void:
-	var o := _make_officer()
-	o.home = c
-	add_child(o)
-	o.position = c.position + c.global_transform.basis.x * 2.8 + Vector3(0, 0.2, 0)
-	o.rotation.y = c.rotation.y
-	officers.append(o)
-	c.officer = o
+func _release_crew(c: Cop) -> void:
+	var n := c.crew
+	c.crew = 0
+	var f := -c.global_transform.basis.z
+	for i in n:
+		var side := -1.0 if i == 0 else 1.0
+		var o := _make_officer()
+		o.home = c
+		add_child(o)
+		o.position = c.position + c.global_transform.basis.x * 2.9 * side + f * 0.6 * float(i) + Vector3(0, 0.2, 0)
+		o.rotation.y = c.rotation.y
+		officers.append(o)
+		c.outs.append(o)
+	_sfx3d("radio", c.position, -2.0, 1.0, 80.0)
 
 
-func _release_home(o: Officer) -> void:
+func _officer_gone(o: Officer, enter: bool) -> void:
 	if is_instance_valid(o.home):
-		o.home.has_officer = true
-		o.home.officer = null
+		o.home.outs.erase(o)
+		if enter:
+			o.home.crew += 1
 
 
 func _officer_shoot(o: Officer, tgt3: Vector3) -> void:
@@ -1296,22 +1852,37 @@ func _officer_shoot(o: Officer, tgt3: Vector3) -> void:
 		return
 	var col = hit["collider"]
 	if col == player or col == car:
-		_tracer(from, hit["position"], false)
+		o.fire_t = 0.3
+		o.a_cur = ""
+		var muzzle := from + (to - from).normalized() * 0.6
+		_tracer(muzzle, hit["position"], 1, false)
+		_muzzle_flash(muzzle, (to - from).normalized(), 0.7)
+		_sfx3d("pistol", from, -3.0, randf_range(0.9, 1.1), 160.0)
 		if randf() < 0.6:
 			_hurt_player(randf_range(4.0, 7.0))
+
+
+func _fleeing() -> bool:
+	return in_car and absf(car_speed) > 5.0
+
+
+func _stopped() -> bool:
+	return (not in_car) or absf(car_speed) < 2.5
 
 
 func _update_officers(delta: float) -> void:
 	var tgt3 := car.position if in_car else player.position
 	var tp := Vector2(tgt3.x, tgt3.z)
 	var chasing := stars > 0 and not dead
+	var go_home := (not chasing) or _fleeing()
 	for i in range(officers.size() - 1, -1, -1):
 		var o := officers[i]
+		o.fire_t = maxf(o.fire_t - delta, 0.0)
 		if o.dead:
 			o.dead_t += delta
 			o.rotation.x = lerpf(o.rotation.x, -PI * 0.5, 1.0 - exp(-8.0 * delta))
 			if o.dead_t > 6.0:
-				_release_home(o)
+				_officer_gone(o, false)
 				o.queue_free()
 				officers.remove_at(i)
 			continue
@@ -1323,44 +1894,42 @@ func _update_officers(delta: float) -> void:
 		var spd := 6.5
 		o.aiming = false
 
-		if not chasing:
-			o.leave_t += delta
-			if o.leave_t > 4.0:
-				_release_home(o)
-				o.queue_free()
-				officers.remove_at(i)
-				continue
+		if go_home:
+			if is_instance_valid(o.home) and not o.home.dead:
+				var hp2 := Vector2(o.home.position.x, o.home.position.z)
+				if op.distance_to(hp2) < 3.6:
+					_officer_gone(o, true)
+					o.queue_free()
+					officers.remove_at(i)
+					continue
+				goal = hp2
+				has_goal = true
+				spd = 7.5
+			elif not chasing:
+				o.leave_t += delta
+				if o.leave_t > 5.0:
+					_officer_gone(o, false)
+					o.queue_free()
+					officers.remove_at(i)
+					continue
+			elif d > 11.0:
+				goal = tp
+				has_goal = true
 		else:
 			o.leave_t = 0.0
-			if in_car:
-				if is_instance_valid(o.home) and not o.home.dead:
-					var hp2 := Vector2(o.home.position.x, o.home.position.z)
-					if op.distance_to(hp2) < 3.4:
-						o.home.has_officer = true
-						o.home.officer = null
-						o.queue_free()
-						officers.remove_at(i)
-						continue
-					goal = hp2
-					has_goal = true
-					spd = 7.5
-				elif d > 11.0:
-					goal = tp
-					has_goal = true
-			else:
-				if d > 11.0:
-					goal = tp
-					has_goal = true
-				o.aiming = d < 36.0
-				o.shoot_cd -= delta
-				if o.aiming and o.shoot_cd <= 0.0:
-					o.shoot_cd = randf_range(0.7, 1.2)
-					_officer_shoot(o, tgt3)
+			if d > 11.0:
+				goal = tp
+				has_goal = true
+			o.aiming = d < 36.0
+			o.shoot_cd -= delta
+			if o.aiming and o.shoot_cd <= 0.0:
+				o.shoot_cd = randf_range(0.7, 1.2)
+				_officer_shoot(o, tgt3)
 
 		if d > 100.0:
 			o.far_t += delta
 			if o.far_t > 10.0:
-				_release_home(o)
+				_officer_gone(o, false)
 				o.queue_free()
 				officers.remove_at(i)
 				continue
@@ -1381,7 +1950,7 @@ func _update_officers(delta: float) -> void:
 		o.moving = has_goal
 
 		var face := vel
-		if o.aiming and not in_car:
+		if o.aiming:
 			face = Vector3(tp.x - op.x, 0, tp.y - op.y)
 		if face.length() > 0.1:
 			o.rotation.y = lerp_angle(o.rotation.y, atan2(-face.x, -face.z), 1.0 - exp(-10.0 * delta))
@@ -1390,9 +1959,18 @@ func _update_officers(delta: float) -> void:
 
 func _animate_officer(o: Officer, delta: float, spd: float) -> void:
 	if o.anim != null:
-		var want := o.a_idle
-		if o.moving:
-			want = o.a_run if spd > 6.0 else o.a_walk
+		var A := o.anims
+		var want := ""
+		if o.fire_t > 0.0 and A.has("1_fire"):
+			want = String(A["1_fire"])
+		elif o.aiming and o.moving:
+			want = _first([A.get("1_run", ""), A.get("1_walk", ""), o.a_run, o.a_walk])
+		elif o.aiming:
+			want = _first([A.get("1_aim", ""), A.get("1_idle", ""), o.a_idle])
+		elif o.moving:
+			want = _first([o.a_run if spd > 6.0 else o.a_walk, o.a_walk, o.a_run])
+		else:
+			want = o.a_idle
 		_ped_play(o, want)
 		return
 	if o.leg_l == null:
@@ -1413,7 +1991,7 @@ func _animate_officer(o: Officer, delta: float, spd: float) -> void:
 	o.arm_r.rotation.x = lerpf(o.arm_r.rotation.x, ar, k)
 
 
-# ---------------------------------------------------------------- wanted / police
+# ---------------------------------------------------------------- wanted / police cars
 
 func _add_wanted(n: int) -> void:
 	evade_t = 0.0
@@ -1424,6 +2002,14 @@ func _add_wanted(n: int) -> void:
 	elif wanted_cool <= 0.0:
 		stars = mini(MAX_STARS, stars + n)
 		wanted_cool = 4.0
+
+
+func _active_cops() -> int:
+	var n := 0
+	for c in cops:
+		if c.crew > 0 or not c.outs.is_empty():
+			n += 1
+	return n
 
 
 func _spawn_cop() -> void:
@@ -1445,6 +2031,7 @@ func _spawn_cop() -> void:
 	c.rotation.y = atan2(-(pp.x - pos.x), -(pp.y - pos.y))
 	add_child(c)
 	cops.append(c)
+	_sfx3d("radio", player.position, -4.0, 1.0, 400.0)
 
 
 func _damage_cop(c: Cop, dmg: float) -> void:
@@ -1453,19 +2040,53 @@ func _damage_cop(c: Cop, dmg: float) -> void:
 	c.hp -= dmg
 	if c.hp <= 0.0:
 		c.dead = true
-		_spark(c.position + Vector3(0, 1.0, 0), Color(1, 0.55, 0.1), 1.0, 0.5, 7.0)
+		_spark_burst(c.position + Vector3(0, 1.0, 0))
+		_sfx3d("crash", c.position, 4.0, 0.7, 200.0)
 		_add_wanted(2)
 		c.queue_free()
 		cops.erase(c)
+
+
+func _spark_burst(pos: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = _spherem(1.0)
+	mi.material_override = _additive(Color(1.0, 0.5, 0.1, 0.8))
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	mi.global_position = pos
+	_fx_add(mi, 0.5, 7.0)
+	_smoke(pos + Vector3(0, 1, 0), Vector3.UP, 0.8, 0.7)
 
 
 func _update_cops(delta: float) -> void:
 	for i in range(cops.size() - 1, -1, -1):
 		var c := cops[i]
 		_update_cop(c, delta)
-		if stars == 0 and c.leave_t > 6.0:
+		var remove := false
+		if stars == 0 and c.leave_t > 6.0 and c.outs.is_empty():
+			remove = true
+		if c.crew == 0 and c.outs.is_empty():
+			c.abandon_t += delta
+			if c.abandon_t > 25.0:
+				remove = true
+		if remove:
 			c.queue_free()
 			cops.remove_at(i)
+
+
+func _los(from: Vector3, to: Vector3, rid: RID) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(from, to, 1)
+	q.exclude = [rid, car.get_rid(), player.get_rid()]
+	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+
+
+func _ray_dist(origin: Vector3, dir: Vector3, length: float, rid: RID) -> float:
+	var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * length, 1)
+	q.exclude = [rid, car.get_rid(), player.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		return length
+	return origin.distance_to(hit["position"])
 
 
 func _update_cop(c: Cop, delta: float) -> void:
@@ -1479,19 +2100,24 @@ func _update_cop(c: Cop, delta: float) -> void:
 		var on := int(time * 6.0) % 2 == 0
 		c.mat_a.emission_energy_multiplier = 4.0 if on else 0.2
 		c.mat_b.emission_energy_multiplier = 0.2 if on else 4.0
+	if c.siren != null and c.siren.stream != null:
+		if chasing and not c.siren.playing:
+			c.siren.play()
+		elif not chasing and c.siren.playing:
+			c.siren.stop()
 
+	if chasing and c.crew > 0 and _stopped() and d < 30.0 and absf(c.speed) < 3.0:
+		_release_crew(c)
+
+	var drive := chasing and c.crew > 0 and not (_stopped() and d < 30.0)
 	var target_speed := 0.0
-	if chasing:
-		if not in_car and d < 32.0 and c.has_officer:
-			c.has_officer = false
-			_spawn_officer(c)
-		if not c.has_officer:
-			if not is_instance_valid(c.officer) or (c.officer as Officer).dead:
-				c.has_officer = true
-				c.officer = null
-
+	if not chasing:
+		c.leave_t += delta
+	if drive:
+		var eye := c.position + Vector3(0, 1.0, 0)
 		var aim := tp
-		if d >= 45.0:
+		var direct := d < 70.0 and _los(eye, tgt3 + Vector3(0, 1.0, 0), c.get_rid())
+		if not direct:
 			c.repath -= delta
 			if c.repath <= 0.0:
 				c.repath = 1.0
@@ -1504,21 +2130,25 @@ func _update_cop(c: Cop, delta: float) -> void:
 		var vec := aim - cp
 		var desired := atan2(-vec.x, -vec.y)
 		var diff := wrapf(desired - c.rotation.y, -PI, PI)
+		var fwd := -c.global_transform.basis.z
+		var org := c.position + Vector3(0, 0.8, 0)
+		var dc := _ray_dist(org, fwd, 14.0, c.get_rid())
+		var dl := _ray_dist(org, fwd.rotated(Vector3.UP, 0.55), 10.0, c.get_rid())
+		var dr := _ray_dist(org, fwd.rotated(Vector3.UP, -0.55), 10.0, c.get_rid())
+		var w := clampf(1.0 - dc / 14.0, 0.0, 1.0)
+		var avoid := clampf((dl - dr) / 10.0, -1.0, 1.0)
 		if c.reverse_t > 0.0:
 			c.reverse_t -= delta
 			target_speed = -9.0
 			c.rotation.y -= clampf(diff, -1.0, 1.0) * 1.5 * delta
 		else:
-			c.rotation.y += clampf(diff, -2.6 * delta, 2.6 * delta)
-			target_speed = COP_MAX
+			var turn := clampf(diff, -2.6 * delta, 2.6 * delta) * (1.0 - w) + avoid * 2.4 * delta * w
+			c.rotation.y += turn
+			target_speed = COP_MAX * clampf(dc / 14.0, 0.25, 1.0)
 			if absf(diff) > 0.8:
-				target_speed = 12.0
+				target_speed = minf(target_speed, 12.0)
 			if d < 8.0:
 				target_speed = 4.0
-		if (not in_car and d < 30.0) or not c.has_officer:
-			target_speed = 0.0
-	else:
-		c.leave_t += delta
 
 	c.speed = move_toward(c.speed, target_speed, 16.0 * delta)
 	var f := -c.global_transform.basis.z
@@ -1531,7 +2161,7 @@ func _update_cop(c: Cop, delta: float) -> void:
 	c.move_and_slide()
 	var actual := c.velocity.dot(f)
 
-	if chasing and c.reverse_t <= 0.0 and target_speed > 8.0 and absf(actual) < 2.5:
+	if drive and c.reverse_t <= 0.0 and target_speed > 8.0 and absf(actual) < 2.5:
 		c.stuck_t += delta
 		if c.stuck_t > 1.2:
 			c.reverse_t = 1.0
@@ -1540,28 +2170,8 @@ func _update_cop(c: Cop, delta: float) -> void:
 		c.stuck_t = 0.0
 	c.speed = actual
 
-	if chasing and in_car:
-		c.shoot_cd -= delta
-		if d < 30.0 and c.shoot_cd <= 0.0 and c.has_officer:
-			c.shoot_cd = randf_range(0.5, 0.9)
-			_cop_shoot(c, tgt3)
-	if chasing and d < 3.4 and absf(c.speed) > 5.0:
+	if drive and d < 3.4 and absf(c.speed) > 5.0:
 		_hurt_player(30.0 * delta)
-
-
-func _cop_shoot(c: Cop, tgt3: Vector3) -> void:
-	var from := c.position + Vector3(0, 1.2, 0)
-	var to := tgt3 + Vector3(0, 1.0, 0)
-	var q := PhysicsRayQueryParameters3D.create(from, to + (to - from).normalized() * 1.0, 1)
-	q.exclude = [c.get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
-	if hit.is_empty():
-		return
-	var col = hit["collider"]
-	if col == player or col == car:
-		_tracer(from, hit["position"], false)
-		if randf() < 0.65:
-			_hurt_player(randf_range(4.0, 8.0))
 
 
 func _update_wanted(delta: float) -> void:
@@ -1570,7 +2180,7 @@ func _update_wanted(delta: float) -> void:
 		evade_t = 0.0
 		return
 	spawn_t -= delta
-	if cops.size() < stars and spawn_t <= 0.0:
+	if _active_cops() < stars and spawn_t <= 0.0:
 		_spawn_cop()
 		spawn_t = 2.5
 	var p3 := car.position if in_car else player.position
@@ -1604,11 +2214,7 @@ func _hurt_player(amount: float) -> void:
 		hp = 0.0
 		dead = true
 		wasted_t = 3.0
-		stick_id = -1
-		stick_vec = Vector2.ZERO
-		look_id = -1
-		jump_id = -1
-		fire_id = -1
+		_clear_touch_ids()
 		_set_phone(false)
 
 
@@ -1629,7 +2235,7 @@ func _respawn() -> void:
 		player_col.set_deferred("disabled", false)
 	player.position = Vector3(0, 0.1, 0)
 	player.velocity = Vector3.ZERO
-	cam_pitch = 0.85
+	cam_pitch = 0.18
 	for i in ammo_res.size():
 		ammo_res[i] = maxi(ammo_res[i], DEFAULT_RES[i])
 	_set_weapon(cur_weapon, false)
@@ -1673,42 +2279,25 @@ func _aim_point(rng: float) -> Vector3:
 	return hit["position"]
 
 
-func _find_target(origin: Vector3, yaw: float, maxd: float, cone: float) -> Node3D:
-	var fwd := Vector3(-sin(yaw), 0, -cos(yaw))
+func _assist_target(origin: Vector3, dir: Vector3, maxd: float, cone: float) -> Node3D:
 	var best: Node3D = null
-	var best_s := 1e9
-	for p in peds:
-		if p.dead:
+	var best_a := cone
+	var all: Array = []
+	all.append_array(peds)
+	all.append_array(officers)
+	all.append_array(cops)
+	for n in all:
+		if "dead" in n and bool(n.dead):
 			continue
-		var s := _target_score(p, origin, fwd, maxd, cone)
-		if s < best_s:
-			best_s = s
-			best = p
-	for o in officers:
-		if o.dead:
+		var v: Vector3 = (n as Node3D).position + Vector3(0, 1.1, 0) - origin
+		var dd := v.length()
+		if dd > maxd or dd < 0.5:
 			continue
-		var s3 := _target_score(o, origin, fwd, maxd, cone)
-		if s3 < best_s:
-			best_s = s3
-			best = o
-	for c in cops:
-		var s2 := _target_score(c, origin, fwd, maxd, cone)
-		if s2 < best_s:
-			best_s = s2
-			best = c
+		var ang := dir.angle_to(v / dd)
+		if ang < best_a:
+			best_a = ang
+			best = n
 	return best
-
-
-func _target_score(n: Node3D, origin: Vector3, fwd: Vector3, maxd: float, cone: float) -> float:
-	var to := n.position + Vector3(0, 1.1, 0) - origin
-	var flat := Vector3(to.x, 0, to.z)
-	var d := flat.length()
-	if d > maxd or d < 0.3:
-		return 1e9
-	var ang := fwd.angle_to(flat / d)
-	if ang > cone:
-		return 1e9
-	return ang * 40.0 + d
 
 
 func _try_fire(delta: float) -> void:
@@ -1740,20 +2329,21 @@ func _try_fire(delta: float) -> void:
 		if ammo_res[cur_weapon] > 0:
 			reloading = true
 			reload_t = 1.3
+			_sfx3d("reload", player.position, -4.0)
 		fire_cd = 0.3
 		return
 
 	fire_cd = float(w["rate"])
 	var origin := player.position + Vector3(0, 1.35, 0)
 	var rng := float(w["range"])
-	var tgt := _find_target(origin, cam_yaw, rng, 0.5)
 	var dir := Vector3(-sin(cam_yaw), 0, -cos(cam_yaw))
-	if tgt != null:
-		dir = (tgt.position + Vector3(0, 1.1, 0) - origin).normalized()
-	elif cur_weapon > 0:
+	if cur_weapon > 0:
 		var to_aim := _aim_point(rng) - origin
 		if to_aim.length() > 2.0:
 			dir = to_aim.normalized()
+		var assist := _assist_target(origin, dir, rng, 0.1)
+		if assist != null:
+			dir = (assist.position + Vector3(0, 1.15, 0) - origin).normalized()
 	model.rotation.y = atan2(-dir.x, -dir.z)
 	aim_t = 3.0
 
@@ -1777,20 +2367,31 @@ func _try_fire(delta: float) -> void:
 		return
 
 	fire_anim_t = 0.3
-	if _wa(cur_weapon, "fire") != "":
+	if _wx(cur_weapon, "fire") != "":
 		a_cur = ""
 	ammo_mag[cur_weapon] -= 1
+	shot_count += 1
+	recoil += float(RECOIL[cur_weapon])
 	_alarm(player.position, 30.0)
-	_spark(origin + dir * 0.8, Color(1, 0.85, 0.3), 0.12, 0.05)
+
+	var muzzle := gun_node.global_transform * Vector3(0, 0, -float(w["len"]) * 0.7)
+	_muzzle_flash(muzzle, dir, float(FLASH_SIZE[cur_weapon]))
+	_sfx3d(String(WEAPON_FILES[cur_weapon]), muzzle, 0.0, randf_range(0.95, 1.05), 200.0)
+	if cur_weapon != 2 or shot_count % 2 == 0:
+		_eject_casing(muzzle)
+	if cur_weapon != 2 or shot_count % 3 == 0:
+		_smoke(muzzle, dir, 0.05, 0.35)
+
 	for i in int(w["pellets"]):
 		var jitter := Vector3(randf_range(-1, 1), randf_range(-1, 1) * 0.5, randf_range(-1, 1)) * float(w["spread"])
-		_bullet(origin + dir * 0.6, (dir + jitter).normalized(), rng, float(w["dmg"]))
+		_bullet(origin + dir * 0.6, (dir + jitter).normalized(), rng, float(w["dmg"]), muzzle)
 	if ammo_mag[cur_weapon] <= 0 and ammo_res[cur_weapon] > 0:
 		reloading = true
 		reload_t = 1.3
+		_sfx3d("reload", player.position, -4.0)
 
 
-func _bullet(from: Vector3, dir: Vector3, rng: float, dmg: float) -> void:
+func _bullet(from: Vector3, dir: Vector3, rng: float, dmg: float, vis_from: Vector3) -> void:
 	var to := from + dir * rng
 	var q := PhysicsRayQueryParameters3D.create(from, to, 3)
 	q.exclude = [player.get_rid(), car.get_rid()]
@@ -1798,55 +2399,17 @@ func _bullet(from: Vector3, dir: Vector3, rng: float, dmg: float) -> void:
 	var end := to
 	if not hit.is_empty():
 		end = hit["position"]
+		var normal: Vector3 = hit["normal"]
 		var col = hit["collider"]
 		if col is Ped:
 			_damage_ped(col as Ped, dmg)
+			_impact(end, normal, true)
 		elif col is Cop:
 			_damage_cop(col as Cop, dmg)
-		_spark(end, Color(1, 0.9, 0.5), 0.14, 0.1)
-	_tracer(from, end, true)
-
-
-func _tracer(from: Vector3, to: Vector3, player_shot: bool) -> void:
-	var d := to - from
-	var l := d.length()
-	if l < 0.05:
-		return
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(0.05, 0.05, l)
-	mi.mesh = bm
-	mi.material_override = tr_mat_p if player_shot else tr_mat_c
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
-	mi.global_position = from + d * 0.5
-	var up := Vector3.UP
-	if absf(d.normalized().y) > 0.98:
-		up = Vector3.RIGHT
-	mi.look_at(to, up)
-	fx.append({"n": mi, "t": 0.06, "g": 0.0})
-
-
-func _spark(pos: Vector3, color: Color, radius: float, life: float, grow: float = 0.0) -> void:
-	var mi := MeshInstance3D.new()
-	mi.mesh = _spherem(radius)
-	mi.material_override = _unshaded(color)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
-	mi.global_position = pos
-	fx.append({"n": mi, "t": life, "g": grow})
-
-
-func _update_fx(delta: float) -> void:
-	for i in range(fx.size() - 1, -1, -1):
-		var f: Dictionary = fx[i]
-		f["t"] = float(f["t"]) - delta
-		var n: Node3D = f["n"]
-		if float(f["g"]) > 0.0:
-			n.scale += Vector3.ONE * float(f["g"]) * delta
-		if float(f["t"]) <= 0.0:
-			n.queue_free()
-			fx.remove_at(i)
+			_impact(end, normal, false)
+		else:
+			_impact(end, normal, false)
+	_tracer(vis_from, end, cur_weapon, true)
 
 
 # ---------------------------------------------------------------- UI
@@ -1859,17 +2422,19 @@ func _build_ui() -> void:
 	ui.draw.connect(_draw_ui)
 	layer.add_child(ui)
 
-	var lbl := Label.new()
-	lbl.text = "Phase 6"
-	lbl.position = Vector2(30, 20)
-	lbl.add_theme_font_size_override("font_size", 36)
-	layer.add_child(lbl)
-
+	mini_panel = Panel.new()
+	mini_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sbm := StyleBoxFlat.new()
+	sbm.bg_color = Color(0.07, 0.08, 0.1)
+	sbm.set_corner_radius_all(int(MINI_SIZE * 0.5))
+	mini_panel.add_theme_stylebox_override("panel", sbm)
+	mini_panel.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	layer.add_child(mini_panel)
 	mini = Control.new()
+	mini.set_anchors_preset(Control.PRESET_FULL_RECT)
 	mini.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	mini.clip_contents = true
 	mini.draw.connect(_draw_mini)
-	layer.add_child(mini)
+	mini_panel.add_child(mini)
 
 	big = Control.new()
 	big.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1897,8 +2462,8 @@ func _build_ui() -> void:
 
 func _process(delta: float) -> void:
 	var r := _mini_rect()
-	mini.position = r.position
-	mini.size = r.size
+	mini_panel.position = r.position
+	mini_panel.size = r.size
 	mini.queue_redraw()
 	ui.queue_redraw()
 	if map_open:
@@ -1923,88 +2488,140 @@ func _star_pts(c: Vector2, r: float) -> PackedVector2Array:
 	return pts
 
 
+func _icon(c: Control, kind: String, p: Vector2, u: float) -> void:
+	var w := Color(1, 1, 1, 0.95)
+	if kind == "fire":
+		c.draw_arc(p, u * 0.85, 0.0, TAU, 32, w, 3.0, true)
+		c.draw_line(p + Vector2(-u * 1.2, 0), p + Vector2(-u * 0.55, 0), w, 3.0)
+		c.draw_line(p + Vector2(u * 1.2, 0), p + Vector2(u * 0.55, 0), w, 3.0)
+		c.draw_line(p + Vector2(0, -u * 1.2), p + Vector2(0, -u * 0.55), w, 3.0)
+		c.draw_line(p + Vector2(0, u * 1.2), p + Vector2(0, u * 0.55), w, 3.0)
+		c.draw_circle(p, u * 0.14, w)
+	elif kind == "punch":
+		c.draw_rect(Rect2(p + Vector2(-0.7, -0.35) * u, Vector2(1.4, 0.95) * u), w)
+		for i in 4:
+			c.draw_circle(p + Vector2(-0.52 + 0.35 * float(i), -0.45) * u, u * 0.2, w)
+		c.draw_rect(Rect2(p + Vector2(-0.95, 0.0) * u, Vector2(0.3, 0.5) * u), w)
+	elif kind == "jump":
+		c.draw_polyline(PackedVector2Array([p + Vector2(-0.8, 0.05) * u, p + Vector2(0, -0.6) * u, p + Vector2(0.8, 0.05) * u]), w, 5.0, true)
+		c.draw_polyline(PackedVector2Array([p + Vector2(-0.8, 0.65) * u, p + Vector2(0, 0.0) * u, p + Vector2(0.8, 0.65) * u]), w, 5.0, true)
+	elif kind == "brake":
+		c.draw_arc(p, u * 0.8, 0.0, TAU, 32, w, 3.0, true)
+		_txt(c, "P", p, int(u * 1.2), w)
+	elif kind == "guns":
+		var q := p + Vector2(0, -u * 0.3)
+		c.draw_rect(Rect2(q + Vector2(-1.0, -0.4) * u, Vector2(2.0, 0.55) * u), w)
+		c.draw_colored_polygon(PackedVector2Array([q + Vector2(-0.45, 0.15) * u, q + Vector2(0.15, 0.15) * u, q + Vector2(-0.05, 1.05) * u, q + Vector2(-0.6, 1.05) * u]), w)
+	elif kind == "car":
+		c.draw_rect(Rect2(p + Vector2(-1.1, -0.05) * u, Vector2(2.2, 0.6) * u), w)
+		c.draw_colored_polygon(PackedVector2Array([p + Vector2(-0.65, -0.05) * u, p + Vector2(-0.35, -0.55) * u, p + Vector2(0.4, -0.55) * u, p + Vector2(0.75, -0.05) * u]), w)
+		for sx in [-0.65, 0.65]:
+			c.draw_circle(p + Vector2(sx, 0.58) * u, u * 0.26, w)
+			c.draw_circle(p + Vector2(sx, 0.58) * u, u * 0.12, Color(0.1, 0.1, 0.12))
+	elif kind == "phone":
+		c.draw_rect(Rect2(p + Vector2(-0.45, -0.8) * u, Vector2(0.9, 1.6) * u), w, false, 3.0)
+		c.draw_line(p + Vector2(-0.15, -0.6) * u, p + Vector2(0.15, -0.6) * u, w, 3.0)
+		c.draw_circle(p + Vector2(0, 0.6) * u, u * 0.1, w)
+
+
+func _btn(c: Control, center: Vector2, r: float, pressed: bool, kind: String, caption: String) -> void:
+	c.draw_circle(center, r, Color(1, 1, 1, 0.32 if pressed else 0.12))
+	c.draw_arc(center, r, 0.0, TAU, 48, Color(1, 1, 1, 0.9), 3.0, true)
+	var shift := -r * 0.12 if caption != "" else 0.0
+	_icon(c, kind, center + Vector2(0, shift), r * 0.42)
+	if caption != "":
+		_txt(c, caption, center + Vector2(0, r * 0.62), 17, Color(1, 1, 1, 0.9))
+
+
+func _mini_rot() -> float:
+	var yaw := car.rotation.y if in_car else model.rotation.y
+	var hd := Vector2(-sin(yaw), -cos(yaw))
+	return -PI * 0.5 - hd.angle()
+
+
 func _draw_ui() -> void:
 	var s := _vp()
 	if hurt_flash > 0.0:
-		ui.draw_rect(Rect2(Vector2.ZERO, s), Color(1, 0, 0, hurt_flash * 0.5))
+		ui.draw_rect(Rect2(Vector2.ZERO, s), Color(1, 0, 0, hurt_flash * 0.45))
 
 	if stick_id != -1 and not map_open:
-		ui.draw_circle(stick_origin, RADIUS, Color(1, 1, 1, 0.15))
-		ui.draw_circle(stick_origin + stick_vec * RADIUS, 45.0, Color(1, 1, 1, 0.5))
+		ui.draw_circle(stick_origin, RADIUS, Color(1, 1, 1, 0.06))
+		ui.draw_arc(stick_origin, RADIUS, 0.0, TAU, 48, Color(1, 1, 1, 0.45), 2.5, true)
+		var kp := stick_origin + stick_vec * RADIUS
+		ui.draw_circle(kp, 46.0, Color(1, 1, 1, 0.4))
+		ui.draw_arc(kp, 46.0, 0.0, TAU, 32, Color(1, 1, 1, 0.9), 3.0, true)
 
-	var jc := _jump_center()
-	var a := 0.4 if jump_id != -1 else 0.18
-	ui.draw_circle(jc, 70.0, Color(1, 1, 1, a))
-	_txt(ui, "BRAKE" if in_car else "JUMP", jc, 28)
-
+	_btn(ui, _jump_center(), 70.0, jump_id != -1, "brake" if in_car else "jump", "BRAKE" if in_car else "JUMP")
 	if in_car or near_car:
-		var ac := _act_center()
-		ui.draw_circle(ac, 70.0, Color(0.2, 0.7, 1.0, 0.4))
-		_txt(ui, "EXIT" if in_car else "ENTER", ac, 28)
-
+		_btn(ui, _act_center(), 70.0, false, "car", "EXIT" if in_car else "ENTER")
 	if not in_car:
-		var fc := _fire_center()
-		ui.draw_circle(fc, 90.0, Color(1, 0.2, 0.2, 0.55 if fire_id != -1 else 0.3))
-		_txt(ui, "PUNCH" if cur_weapon == 0 else "FIRE", fc, 32)
-		var wc := _wpn_center()
-		ui.draw_circle(wc, 62.0, Color(0.9, 0.9, 0.3, 0.3))
-		_txt(ui, "GUNS", wc, 26)
-
-	var pc := _phone_btn_center()
-	ui.draw_circle(pc, 52.0, Color(0.3, 0.8, 1.0, 0.35))
-	_txt(ui, "PHONE", pc, 24)
+		_btn(ui, _fire_center(), 90.0, fire_id != -1, "punch" if cur_weapon == 0 else "fire", "")
+		_btn(ui, _wpn_center(), 62.0, false, "guns", "")
+	_btn(ui, _phone_btn_center(), 52.0, false, "phone", "")
 
 	if in_car:
 		_draw_gauge()
 
-	ui.draw_rect(Rect2(30, 84, 320, 24), Color(0, 0, 0, 0.5))
-	var hc := Color(0.9, 0.2, 0.2).lerp(Color(0.3, 0.9, 0.4), clampf(hp / 100.0, 0.0, 1.0))
-	ui.draw_rect(Rect2(32, 86, 316.0 * clampf(hp / 100.0, 0.0, 1.0), 20), hc)
+	var mr := _mini_rect()
+	var mc := mr.position + mr.size * 0.5
+	var mrad := mr.size.x * 0.5
+	ui.draw_arc(mc, mrad, 0.0, TAU, 80, Color(1, 1, 1, 0.92), 5.0, true)
+	var rot := _mini_rot()
+	var np := mc + Vector2(0, -1).rotated(rot) * (mrad - 22.0)
+	ui.draw_circle(np, 16.0, Color(0.05, 0.06, 0.08, 0.9))
+	_txt(ui, "N", np, 20)
+	var ec := mc + Vector2(0.7071, 0.7071) * mrad
+	ui.draw_circle(ec, 24.0, Color(0.05, 0.06, 0.08, 0.95))
+	ui.draw_arc(ec, 24.0, 0.0, TAU, 24, Color(1, 1, 1, 0.9), 2.5, true)
+	ui.draw_line(ec + Vector2(-9, 0), ec + Vector2(9, 0), Color.WHITE, 3.0)
+	ui.draw_line(ec + Vector2(0, -9), ec + Vector2(0, 9), Color.WHITE, 3.0)
+
+	var hb := Rect2(mr.position.x, mr.end.y + 18.0, mr.size.x, 22.0)
+	ui.draw_rect(hb, Color(0.03, 0.03, 0.05, 0.75))
+	var hf := clampf(hp / 100.0, 0.0, 1.0)
+	var hcol := Color(0.9, 0.12, 0.18).lerp(Color(1.0, 0.3, 0.3), hf)
+	ui.draw_rect(Rect2(hb.position + Vector2(3, 3), Vector2((hb.size.x - 6.0) * hf, hb.size.y - 6.0)), hcol)
+	ui.draw_rect(hb, Color(1, 1, 1, 0.9), false, 2.0)
+	_txt(ui, "%d" % int(hp), hb.position + hb.size * 0.5, 16)
+
 	var w: Dictionary = WEAPONS[cur_weapon]
-	var info := String(w["name"])
+	var pill := Rect2(mr.position.x, mr.end.y + 52.0, mr.size.x, 46.0)
+	ui.draw_style_box(sb_pill, pill)
+	ui.draw_string(ThemeDB.fallback_font, pill.position + Vector2(18, 32), String(w["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color.WHITE)
 	if cur_weapon > 0:
-		info += "   %d / %d" % [ammo_mag[cur_weapon], ammo_res[cur_weapon]]
-	if reloading:
-		info += "   RELOAD"
-	ui.draw_string(ThemeDB.fallback_font, Vector2(30, 152), info, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color.WHITE)
+		var am := "%d | %d" % [ammo_mag[cur_weapon], ammo_res[cur_weapon]]
+		if reloading:
+			am = "RELOAD"
+		ui.draw_string(ThemeDB.fallback_font, pill.position + Vector2(pill.size.x - 150.0, 32), am, HORIZONTAL_ALIGNMENT_RIGHT, 132, 26, Color(1, 1, 1, 0.95))
 
 	var blink := evade_t > 0.0 and (int(time * 4.0) % 2 == 0)
 	for i in MAX_STARS:
 		var cpos := Vector2(s.x * 0.5 + (float(i) - 2.0) * 72.0, 60.0)
 		var pts := _star_pts(cpos, 30.0)
 		if i < stars and not blink:
-			ui.draw_colored_polygon(pts, Color(1, 0.85, 0.2))
+			ui.draw_colored_polygon(pts, Color(1, 0.95, 0.75))
 		else:
 			var cl := PackedVector2Array(pts)
 			cl.append(pts[0])
 			ui.draw_polyline(cl, Color(1, 1, 1, 0.4), 3.0, true)
 
-	if cur_weapon > 0 and not in_car and not dead:
-		if is_instance_valid(lock_node):
-			var wp := lock_node.position + Vector3(0, 1.1, 0)
-			if not cam.is_position_behind(wp):
-				var sp := cam.unproject_position(wp)
-				ui.draw_arc(sp, 36.0, 0.0, TAU, 32, Color(1, 0.2, 0.2, 0.9), 4.0, true)
-				ui.draw_line(sp + Vector2(-48, 0), sp + Vector2(-24, 0), Color(1, 0.2, 0.2), 4.0)
-				ui.draw_line(sp + Vector2(48, 0), sp + Vector2(24, 0), Color(1, 0.2, 0.2), 4.0)
-				ui.draw_line(sp + Vector2(0, -48), sp + Vector2(0, -24), Color(1, 0.2, 0.2), 4.0)
-				ui.draw_line(sp + Vector2(0, 48), sp + Vector2(0, 24), Color(1, 0.2, 0.2), 4.0)
-		if aim_blend > 0.2:
-			var cc := s * 0.5
-			var ca := Color(1, 1, 1, 0.9 * aim_blend)
-			ui.draw_circle(cc, 3.0, ca)
-			ui.draw_line(cc + Vector2(-26, 0), cc + Vector2(-10, 0), ca, 3.0)
-			ui.draw_line(cc + Vector2(26, 0), cc + Vector2(10, 0), ca, 3.0)
-			ui.draw_line(cc + Vector2(0, -26), cc + Vector2(0, -10), ca, 3.0)
-			ui.draw_line(cc + Vector2(0, 26), cc + Vector2(0, 10), ca, 3.0)
+	if cur_weapon > 0 and not in_car and not dead and aim_blend > 0.2:
+		var cc := s * 0.5
+		var ca := Color(1, 1, 1, 0.9 * aim_blend)
+		ui.draw_circle(cc, 3.0, ca)
+		ui.draw_line(cc + Vector2(-24, 0), cc + Vector2(-9, 0), ca, 3.0)
+		ui.draw_line(cc + Vector2(24, 0), cc + Vector2(9, 0), ca, 3.0)
+		ui.draw_line(cc + Vector2(0, -24), cc + Vector2(0, -9), ca, 3.0)
+		ui.draw_line(cc + Vector2(0, 24), cc + Vector2(0, 9), ca, 3.0)
 
-	var mr := _mini_rect()
 	if dest_set:
-		_txt(ui, "%d m" % int(_route_len()), Vector2(mr.position.x + mr.size.x * 0.5, mr.end.y + 28.0), 30, Color(1, 0.8, 0.2))
+		_txt(ui, "%d m" % int(_route_len()), Vector2(mr.position.x + mr.size.x * 0.5, mr.end.y + 128.0), 30, Color(0.85, 0.5, 1.0))
 	if arrived_t > 0.0:
-		_txt(ui, "ARRIVED", Vector2(s.x * 0.5, 150.0), 60, Color(0.4, 1, 0.5))
+		_txt(ui, "ARRIVED", Vector2(s.x * 0.5, 150.0), 60, Color(1, 1, 1))
 	if toast_t > 0.0:
-		ui.draw_string(ThemeDB.fallback_font, Vector2(s.x * 0.5 - 600.0, 250.0), toast_msg, HORIZONTAL_ALIGNMENT_CENTER, 1200, 38, Color(1, 1, 1, clampf(toast_t, 0.0, 1.0)))
+		var lines := toast_msg.split("\n")
+		for i in lines.size():
+			ui.draw_string(ThemeDB.fallback_font, Vector2(s.x * 0.5 - 600.0, 250.0 + float(i) * 40.0), lines[i], HORIZONTAL_ALIGNMENT_CENTER, 1200, 30, Color(1, 1, 1, clampf(toast_t, 0.0, 1.0)))
 
 	if dead:
 		ui.draw_rect(Rect2(Vector2.ZERO, s), Color(0.4, 0, 0, 0.5))
@@ -2033,7 +2650,7 @@ func _draw_phone() -> void:
 	phone.draw_circle(hc, 30.0, Color(1, 1, 1, 0.25))
 	phone.draw_arc(hc, 30.0, 0.0, TAU, 32, Color(1, 1, 1, 0.8), 4.0, true)
 	if toast_t > 0.0:
-		_txt(phone, toast_msg, Vector2(r.position.x + r.size.x * 0.5, r.end.y - 150.0), 28, Color(1, 0.9, 0.4))
+		_txt(phone, toast_msg.get_slice("\n", 0), Vector2(r.position.x + r.size.x * 0.5, r.end.y - 150.0), 28, Color(1, 0.9, 0.4))
 
 
 func _draw_wheel() -> void:
@@ -2042,8 +2659,8 @@ func _draw_wheel() -> void:
 	for i in WEAPONS.size():
 		var pos := _wheel_pos(i)
 		var sel := i == cur_weapon
-		wheel.draw_circle(pos, 92.0, Color(0.2, 0.7, 1.0, 0.6) if sel else Color(0.14, 0.16, 0.2, 0.9))
-		wheel.draw_arc(pos, 92.0, 0.0, TAU, 40, Color(1, 1, 1, 0.8 if sel else 0.3), 4.0, true)
+		wheel.draw_circle(pos, 92.0, Color(1, 1, 1, 0.3) if sel else Color(0.14, 0.16, 0.2, 0.9))
+		wheel.draw_arc(pos, 92.0, 0.0, TAU, 40, Color(1, 1, 1, 0.9 if sel else 0.35), 4.0, true)
 		var w: Dictionary = WEAPONS[i]
 		_txt(wheel, String(w["name"]), pos + Vector2(0, -12), 26)
 		if i > 0:
@@ -2098,50 +2715,86 @@ func _draw_gauge() -> void:
 	_txt(ui, "KM/H", c + Vector2(0, 96), 20, Color(1, 1, 1, 0.6))
 
 
-func _draw_map_content(c: Control, origin: Vector2, w_off: Vector2, sc: float, k: float, bounds: Rect2) -> void:
+func _mp(w: Vector2, origin: Vector2, w_off: Vector2, sc: float, rot: float) -> Vector2:
+	return origin + ((w + w_off) * sc).rotated(rot)
+
+
+func _wrect(c: Control, r: Rect2, o: Vector2, wo: Vector2, sc: float, rot: float, col: Color) -> void:
+	var pts := PackedVector2Array([
+		_mp(r.position, o, wo, sc, rot),
+		_mp(r.position + Vector2(r.size.x, 0), o, wo, sc, rot),
+		_mp(r.end, o, wo, sc, rot),
+		_mp(r.position + Vector2(0, r.size.y), o, wo, sc, rot)
+	])
+	c.draw_colored_polygon(pts, col)
+
+
+func _clamp_blip(p: Vector2, origin: Vector2, circle_r: float, bounds: Rect2) -> Vector2:
+	if circle_r > 0.0:
+		return origin + (p - origin).limit_length(circle_r)
+	return Vector2(clampf(p.x, bounds.position.x + 12.0, bounds.end.x - 12.0), clampf(p.y, bounds.position.y + 12.0, bounds.end.y - 12.0))
+
+
+func _draw_map_content(c: Control, o: Vector2, wo: Vector2, sc: float, k: float, rot: float, circle_r: float, bounds: Rect2, cull: float) -> void:
+	var pc := -wo
 	for r in block_rects:
-		c.draw_rect(Rect2(origin + (r.position + w_off) * sc, r.size * sc), Color(0.28, 0.3, 0.34))
+		if cull > 0.0 and (r.get_center() - pc).length() > cull:
+			continue
+		_wrect(c, r, o, wo, sc, rot, Color(0.17, 0.19, 0.23))
 	for r in bld_rects:
-		c.draw_rect(Rect2(origin + (r.position + w_off) * sc, r.size * sc), Color(0.5, 0.55, 0.62))
+		if cull > 0.0 and (r.get_center() - pc).length() > cull:
+			continue
+		_wrect(c, r, o, wo, sc, rot, Color(0.31, 0.34, 0.41))
+	var lc := Color(0.6, 0.55, 0.2, 0.45)
+	for i in range(-3, 4):
+		var a := float(i) * BLOCK
+		c.draw_line(_mp(Vector2(a, -ROAD_MAX), o, wo, sc, rot), _mp(Vector2(a, ROAD_MAX), o, wo, sc, rot), lc, 1.5 * k)
+		c.draw_line(_mp(Vector2(-ROAD_MAX, a), o, wo, sc, rot), _mp(Vector2(ROAD_MAX, a), o, wo, sc, rot), lc, 1.5 * k)
 
 	if route.size() >= 2:
 		var pts := PackedVector2Array()
 		for v in route:
-			pts.append(origin + (v + w_off) * sc)
-		c.draw_polyline(pts, Color(1.0, 0.78, 0.15), 4.0 * k, true)
+			pts.append(_mp(v, o, wo, sc, rot))
+		c.draw_polyline(pts, Color(0.78, 0.35, 1.0), 5.0 * k, true)
 
 	if dest_set:
-		var dp := origin + (dest + w_off) * sc
-		dp = Vector2(
-			clampf(dp.x, bounds.position.x + 12.0, bounds.end.x - 12.0),
-			clampf(dp.y, bounds.position.y + 12.0, bounds.end.y - 12.0)
-		)
-		c.draw_circle(dp, 10.0 * k, Color(1, 0.3, 0.2))
-		c.draw_circle(dp, 4.0 * k, Color.WHITE)
+		var dp := _clamp_blip(_mp(dest, o, wo, sc, rot), o, circle_r, bounds)
+		c.draw_circle(dp, 11.0 * k, Color(0.78, 0.35, 1.0))
+		c.draw_circle(dp, 4.5 * k, Color.WHITE)
 
+	var flash := int(time * 4.0) % 2 == 0
+	var pol := Color(0.2, 0.45, 1.0) if flash else Color(1.0, 0.18, 0.18)
 	for cop in cops:
-		var cpp := origin + (Vector2(cop.position.x, cop.position.z) + w_off) * sc
-		c.draw_circle(cpp, 8.0 * k, Color(0.2, 0.4, 1.0))
+		var cpp := _clamp_blip(_mp(Vector2(cop.position.x, cop.position.z), o, wo, sc, rot), o, circle_r, bounds)
+		c.draw_circle(cpp, 9.0 * k, Color.WHITE)
+		c.draw_circle(cpp, 6.5 * k, pol)
 	for off in officers:
 		if not off.dead:
-			var opp := origin + (Vector2(off.position.x, off.position.z) + w_off) * sc
-			c.draw_circle(opp, 5.0 * k, Color(0.4, 0.6, 1.0))
+			var opp := _clamp_blip(_mp(Vector2(off.position.x, off.position.z), o, wo, sc, rot), o, circle_r, bounds)
+			c.draw_circle(opp, 5.5 * k, pol)
 
 	if not in_car:
-		var cp := origin + (Vector2(car.position.x, car.position.z) + w_off) * sc
-		c.draw_rect(Rect2(cp - Vector2(6, 6) * k, Vector2(12, 12) * k), Color(1, 0.2, 0.2))
+		var cp := _clamp_blip(_mp(Vector2(car.position.x, car.position.z), o, wo, sc, rot), o, circle_r, bounds)
+		c.draw_rect(Rect2(cp - Vector2(6, 6) * k, Vector2(12, 12) * k), Color.WHITE)
+		c.draw_rect(Rect2(cp - Vector2(4, 4) * k, Vector2(8, 8) * k), Color(0.3, 0.7, 1.0))
 
 	var p3 := car.position if in_car else player.position
-	var pp := origin + (Vector2(p3.x, p3.z) + w_off) * sc
+	var pp := _mp(Vector2(p3.x, p3.z), o, wo, sc, rot)
 	var yaw := car.rotation.y if in_car else model.rotation.y
-	var d := Vector2(-sin(yaw), -cos(yaw))
+	var d := Vector2(-sin(yaw), -cos(yaw)).rotated(rot)
 	var perp := Vector2(-d.y, d.x)
+	var tri_o := PackedVector2Array([
+		pp + d * 20.0 * k,
+		pp - d * 12.0 * k + perp * 13.0 * k,
+		pp - d * 12.0 * k - perp * 13.0 * k
+	])
+	c.draw_colored_polygon(tri_o, Color(0.02, 0.02, 0.03))
 	var tri := PackedVector2Array([
 		pp + d * 16.0 * k,
-		pp - d * 10.0 * k + perp * 10.0 * k,
-		pp - d * 10.0 * k - perp * 10.0 * k
+		pp - d * 9.0 * k + perp * 9.5 * k,
+		pp - d * 9.0 * k - perp * 9.5 * k
 	])
-	c.draw_colored_polygon(tri, Color(0.2, 0.85, 1.0))
+	c.draw_colored_polygon(tri, Color.WHITE)
 
 
 func _draw_mini() -> void:
@@ -2149,15 +2802,9 @@ func _draw_mini() -> void:
 	var ctr := sz * 0.5
 	var p3 := car.position if in_car else player.position
 	var ppos := Vector2(p3.x, p3.z)
-	var sc := sz.x / 170.0
-	mini.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.1, 0.12, 0.15))
-	_draw_map_content(mini, ctr, -ppos, sc, 1.0, Rect2(Vector2.ZERO, sz))
-	mini.draw_rect(Rect2(Vector2.ZERO, sz), Color(1, 1, 1, 0.85), false, 4.0)
-	_txt(mini, "N", Vector2(sz.x * 0.5, 22.0), 24)
-	var ic := Vector2(sz.x - 34.0, sz.y - 34.0)
-	mini.draw_rect(Rect2(ic - Vector2(22, 22), Vector2(44, 44)), Color(0, 0, 0, 0.6))
-	mini.draw_line(ic + Vector2(-10, 0), ic + Vector2(10, 0), Color.WHITE, 4.0)
-	mini.draw_line(ic + Vector2(0, -10), ic + Vector2(0, 10), Color.WHITE, 4.0)
+	var sc := sz.x / MINI_VIEW
+	mini.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.07, 0.08, 0.1))
+	_draw_map_content(mini, ctr, -ppos, sc, 1.0, _mini_rot(), sz.x * 0.5 - 16.0, Rect2(Vector2.ZERO, sz), MINI_VIEW * 0.5 + 40.0)
 
 
 func _draw_big() -> void:
@@ -2165,22 +2812,22 @@ func _draw_big() -> void:
 	var br := _big_rect()
 	var sc := br.size.x / (MAP_HALF * 2.0)
 	big.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.82))
-	big.draw_rect(br, Color(0.1, 0.12, 0.15))
-	_draw_map_content(big, br.position, Vector2(MAP_HALF, MAP_HALF), sc, 1.7, br)
-	big.draw_rect(br, Color(1, 1, 1, 0.9), false, 4.0)
+	big.draw_style_box(sb_map, br.grow(10.0))
+	big.draw_rect(br, Color(0.07, 0.08, 0.1))
+	_draw_map_content(big, br.position, Vector2(MAP_HALF, MAP_HALF), sc, 1.7, 0.0, -1.0, br, -1.0)
 
 	var cr := _close_rect()
-	big.draw_rect(cr, Color(0.8, 0.2, 0.2, 0.9))
+	big.draw_style_box(sb_btn, cr)
 	_txt(big, "CLOSE", cr.position + cr.size * 0.5, 36)
 	var kr := _clear_rect()
-	big.draw_rect(kr, Color(0.25, 0.3, 0.4, 0.9))
+	big.draw_style_box(sb_btn, kr)
 	_txt(big, "CLEAR", kr.position + kr.size * 0.5, 36)
 
 	var lx := br.position.x * 0.5
 	_txt(big, "TAP THE MAP", Vector2(lx, 200.0), 40)
-	_txt(big, "TO PICK A DESTINATION", Vector2(lx, 250.0), 28, Color(1, 1, 1, 0.7))
+	_txt(big, "TO SET A WAYPOINT", Vector2(lx, 250.0), 28, Color(1, 1, 1, 0.7))
 	if dest_set:
-		_txt(big, "%d m" % int(_route_len()), Vector2(lx, 340.0), 64, Color(1, 0.8, 0.2))
+		_txt(big, "%d m" % int(_route_len()), Vector2(lx, 340.0), 64, Color(0.85, 0.5, 1.0))
 
 
 # ---------------------------------------------------------------- map / phone logic
@@ -2247,7 +2894,7 @@ func _phone_app(i: int) -> void:
 		_set_wheel(true)
 	elif i == 3:
 		if not dest_set:
-			_toast("SET A DESTINATION ON THE MAP")
+			_toast("SET A WAYPOINT ON THE MAP")
 			return
 		var tgt2 := _snap_to_road(dest)
 		var np := Vector3(tgt2.x, 0.3, tgt2.y)
@@ -2259,7 +2906,7 @@ func _phone_app(i: int) -> void:
 		else:
 			player.position = np
 			player.velocity = Vector3.ZERO
-		cam.position = np + Vector3(0, 6, 9)
+		cam.position = np + Vector3(0, 3, 6)
 		_clear_route()
 		arrived_t = 3.0
 		_set_phone(false)
@@ -2316,13 +2963,12 @@ func _toggle_car() -> void:
 		player.visible = true
 		player_col.set_deferred("disabled", false)
 		model.rotation.y = car.rotation.y
-		cam_pitch = 0.85
 	else:
 		in_car = true
 		player.visible = false
 		player_col.set_deferred("disabled", true)
-		cam_pitch = 0.5
 		cam_yaw = car.rotation.y
+	cam_pitch = 0.2
 	_set_weapon(cur_weapon, false)
 
 
@@ -2398,9 +3044,9 @@ func _input(event: InputEvent) -> void:
 		elif event.index == look_id:
 			cam_yaw -= event.relative.x * 0.005
 			if aim_t > 0.0 and cur_weapon > 0 and not in_car:
-				aim_pitch = clampf(aim_pitch + event.relative.y * 0.004, -0.15, 0.9)
+				aim_pitch = clampf(aim_pitch + event.relative.y * 0.004, -0.2, 0.7)
 			else:
-				cam_pitch = clampf(cam_pitch + event.relative.y * 0.004, 0.2, 1.35)
+				cam_pitch = clampf(cam_pitch + event.relative.y * 0.004, -0.1, 0.8)
 
 
 # ---------------------------------------------------------------- physics
@@ -2412,6 +3058,7 @@ func _physics_process(delta: float) -> void:
 	hurt_flash = maxf(hurt_flash - delta, 0.0)
 	fire_anim_t = maxf(fire_anim_t - delta, 0.0)
 	raise_t = maxf(raise_t - delta, 0.0)
+	recoil = move_toward(recoil, 0.0, 0.6 * delta)
 
 	var armed_now := aim_t > 0.0 and cur_weapon > 0 and not in_car
 	if armed_now and not prev_armed:
@@ -2427,6 +3074,9 @@ func _physics_process(delta: float) -> void:
 
 	near_car = (not in_car) and (not dead) and player.position.distance_to(car.position) < 6.0
 
+	if not in_car and look_id == -1 and not armed_now and not dead:
+		cam_yaw -= input.x * 1.3 * clampf(-input.y, 0.0, 1.0) * delta
+
 	if in_car:
 		_drive(delta, input, not dead, jump_id != -1)
 		player.position = car.position
@@ -2437,12 +3087,6 @@ func _physics_process(delta: float) -> void:
 	_fix_hold_scale()
 	gun_node.visible = cur_weapon > 0 and not in_car and aim_t > 0.0 and not phone_open
 	phone_node.visible = phone_open and not in_car
-
-	if not in_car and not dead and cur_weapon > 0:
-		var w: Dictionary = WEAPONS[cur_weapon]
-		lock_node = _find_target(player.position + Vector3(0, 1.35, 0), cam_yaw, float(w["range"]), 0.5)
-	else:
-		lock_node = null
 
 	_try_fire(delta)
 	_update_peds(delta)
@@ -2496,6 +3140,11 @@ func _walk(delta: float, input: Vector2) -> void:
 	player.move_and_slide()
 
 	speed = hv.length()
+	if speed > 0.8 and player.is_on_floor():
+		step_t -= delta * clampf(speed, 0.0, 8.0) / 1.8
+		if step_t <= 0.0:
+			step_t = 1.0
+			_sfx3d("step", player.position, -9.0 + clampf(speed, 0.0, 8.0) * 0.5, randf_range(0.85, 1.15), 40.0)
 	if aim_t > 0.0 and cur_weapon > 0:
 		model.rotation.y = lerp_angle(model.rotation.y, cam_yaw, 1.0 - exp(-12.0 * delta))
 	elif target.length() > 0.1:
@@ -2557,35 +3206,54 @@ func _drive(delta: float, input: Vector2, driven: bool, handbrake: bool) -> void
 		if i < 2:
 			w.rotation.y = -car_steer
 
+	_update_car_audio(delta, throttle, handbrake and driven, prev_speed)
+
 
 func _update_camera(delta: float) -> void:
-	var ratio := clampf(absf(car_speed) / CAR_MAX, 0.0, 1.0)
+	var cratio := clampf(absf(car_speed) / CAR_MAX, 0.0, 1.0)
+	var run_f := clampf(speed / MAX_SPEED, 0.0, 1.0)
 	var base := car.position if in_car else player.position
-	var dist := 10.0
-	var h := 1.8
-	var follow := 14.0
-	var pitch := cam_pitch
 	var aiming := aim_t > 0.0 and cur_weapon > 0 and not in_car and not dead
 	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, 4.0 * delta)
 
+	var dist := 3.6
+	var h := 1.55
+	var shoulder := 0.55
+	var follow := 14.0
+	var pitch := cam_pitch
 	if in_car:
-		dist = 14.0 + ratio * 2.0
-		h = 1.8
-		follow = 18.0
+		dist = 7.5 + cratio * 2.5
+		h = 1.9
+		shoulder = 0.0
+		follow = 16.0
 		if look_id == -1:
 			cam_yaw = lerp_angle(cam_yaw, car.rotation.y, 1.0 - exp(-2.5 * delta))
 	else:
-		dist = lerpf(10.0, 5.5, aim_blend)
-		h = lerpf(1.8, 1.7, aim_blend)
+		dist = lerpf(3.6 + run_f * 0.9, 2.3, aim_blend)
+		h = lerpf(1.55, 1.6, aim_blend)
+		shoulder = lerpf(0.55, 0.85, aim_blend)
 		pitch = lerpf(cam_pitch, aim_pitch, aim_blend)
+	pitch += recoil
 
 	var tgt := base + Vector3(0, h, 0)
 	var right := Vector3(cos(cam_yaw), 0, -sin(cam_yaw))
-	tgt += right * 0.9 * aim_blend
+	tgt += right * shoulder
 	var off := Vector3(0, 0, dist).rotated(Vector3.RIGHT, -pitch).rotated(Vector3.UP, cam_yaw)
-	cam.position = cam.position.lerp(tgt + off, 1.0 - exp(-follow * delta))
+	var desired := tgt + off
+
+	var q := PhysicsRayQueryParameters3D.create(tgt, desired, 1)
+	q.exclude = [player.get_rid(), car.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	var kf := follow
+	if not hit.is_empty():
+		desired = hit["position"] + (tgt - desired).normalized() * 0.35
+		kf = 30.0
+	cam.position = cam.position.lerp(desired, 1.0 - exp(-kf * delta))
 	cam.look_at(tgt)
-	var fov_t := 70.0 + (14.0 * ratio if in_car else 0.0) - 12.0 * aim_blend
+
+	var fov_t := 68.0 + run_f * 10.0 - 14.0 * aim_blend
+	if in_car:
+		fov_t = 66.0 + cratio * 26.0
 	cam.fov = lerpf(cam.fov, fov_t, 1.0 - exp(-4.0 * delta))
 
 
@@ -2653,16 +3321,16 @@ func _animate_glb(on_floor: bool) -> void:
 
 	if armed:
 		if raise_t > 0.0:
-			want = _wa(w, "raise")
+			want = _wx(w, "raise")
 		if want == "" and fire_anim_t > 0.0:
-			want = _wa(w, "fire")
+			want = _wx(w, "fire")
 		if want == "":
 			if run:
-				want = _first([_wa(w, "run"), _wa(w, "walk"), a_run, a_walk])
+				want = _first([_wx(w, "run"), _wx(w, "walk"), a_run, a_walk])
 			elif walk:
-				want = _first([_wa(w, "walk"), _wa(w, "run"), a_walk, a_run])
+				want = _first([_wx(w, "walk"), _wx(w, "run"), a_walk, a_run])
 			else:
-				want = _first([_wa(w, "aim"), _wa(w, "idle"), a_aim, a_idle])
+				want = _first([_wx(w, "aim"), _wx(w, "idle"), a_aim, a_idle])
 
 	if want == "":
 		if not on_floor and a_jump != "":
@@ -2687,9 +3355,9 @@ func _animate_glb(on_floor: bool) -> void:
 
 	if frozen:
 		anim_player.speed_scale = 0.0
-	elif a_cur != "" and (a_cur == a_walk or a_cur == _wa(w, "walk")):
+	elif a_cur != "" and (a_cur == a_walk or a_cur == _wx(w, "walk")):
 		anim_player.speed_scale = clampf(speed / 2.5, 0.6, 1.6)
-	elif a_cur != "" and (a_cur == a_run or a_cur == _wa(w, "run")):
+	elif a_cur != "" and (a_cur == a_run or a_cur == _wx(w, "run")):
 		anim_player.speed_scale = clampf(speed / 7.0, 0.8, 1.4)
 	else:
 		anim_player.speed_scale = 1.0
