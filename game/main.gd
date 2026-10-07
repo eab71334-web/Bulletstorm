@@ -2,16 +2,31 @@ extends Node3D
 
 const GLB_PATH := "res://game/character.glb"
 const GLB_YAW := PI
+const CAR_GLB_PATH := "res://game/car.glb"
+const CAR_GLB_YAW := 0.0
+const CAR_LENGTH := 4.4
+
 const MAX_SPEED := 8.5
 const JUMP_V := 9.0
 const GRAVITY := 25.0
 const RADIUS := 110.0
 const BLOCK := 54.0
 
+const CAR_MAX := 45.0
+const CAR_ACCEL := 16.0
+const CAR_BRAKE := 32.0
+const WHEELBASE := 3.4
+const GAUGE_MAX := 220.0
+const MAP_HALF := 180.0
+
 var player: CharacterBody3D
+var player_col: CollisionShape3D
 var model: Node3D
 var cam: Camera3D
 var ui: Control
+var mini: Control
+var big: Control
+
 var cam_yaw := 0.0
 var cam_pitch := 0.85
 var stick_id := -1
@@ -38,18 +53,77 @@ var a_run := ""
 var a_jump := ""
 var a_cur := ""
 
+var car: CharacterBody3D
+var car_visual: Node3D
+var car_wheels: Array[Node3D] = []
+var car_speed := 0.0
+var car_steer := 0.0
+var car_accel_s := 0.0
+var in_car := false
+var near_car := false
+
+var map_open := false
+var bld_rects: Array[Rect2] = []
+var block_rects: Array[Rect2] = []
+var dest_set := false
+var dest := Vector2.ZERO
+var route: Array[Vector2] = []
+var route_timer := 0.0
+var astar := AStar2D.new()
+var dest_marker: MeshInstance3D
+var arrived_t := 0.0
+
 
 func _ready() -> void:
 	_build_world()
 	_build_city()
 	_build_player()
+	_build_car()
 	_build_ui()
+	_build_marker()
 
+
+# ---------------------------------------------------------------- helpers
 
 func _mat(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = c
 	return m
+
+
+func _vp() -> Vector2:
+	return get_viewport().get_visible_rect().size
+
+
+func _jump_center() -> Vector2:
+	return _vp() - Vector2(170, 170)
+
+
+func _act_center() -> Vector2:
+	return _vp() - Vector2(350, 130)
+
+
+func _mini_rect() -> Rect2:
+	var s := _vp()
+	return Rect2(s.x - 310.0, 24.0, 280.0, 280.0)
+
+
+func _big_rect() -> Rect2:
+	var s := _vp()
+	var d := s.y - 48.0
+	return Rect2((s.x - d) / 2.0, 24.0, d, d)
+
+
+func _close_rect() -> Rect2:
+	return Rect2(_vp().x - 280.0, 30.0, 240.0, 90.0)
+
+
+func _clear_rect() -> Rect2:
+	return Rect2(_vp().x - 280.0, 140.0, 240.0, 90.0)
+
+
+func _txt(c: Control, t: String, p: Vector2, size: int, col: Color = Color.WHITE) -> void:
+	c.draw_string(ThemeDB.fallback_font, p + Vector2(-150.0, size * 0.35), t, HORIZONTAL_ALIGNMENT_CENTER, 300, size, col)
 
 
 func _box(pos: Vector3, size: Vector3, mat: Material, solid: bool) -> void:
@@ -74,6 +148,49 @@ func _box(pos: Vector3, size: Vector3, mat: Material, solid: bool) -> void:
 		add_child(mi)
 
 
+func _part(parent: Node3D, mesh: Mesh, pos: Vector3, mat: Material) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	mi.mesh = mesh
+	mi.position = pos
+	mi.material_override = mat
+	parent.add_child(mi)
+	return mi
+
+
+func _boxm(size: Vector3) -> BoxMesh:
+	var b := BoxMesh.new()
+	b.size = size
+	return b
+
+
+func _spherem(r: float) -> SphereMesh:
+	var s := SphereMesh.new()
+	s.radius = r
+	s.height = r * 2.0
+	return s
+
+
+func _limb(parent: Node3D, pivot_pos: Vector3, r: float, h: float, mat: Material) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.position = pivot_pos
+	parent.add_child(pivot)
+	var cm := CapsuleMesh.new()
+	cm.radius = r
+	cm.height = h
+	_part(pivot, cm, Vector3(0, -h / 2.0, 0), mat)
+	return pivot
+
+
+func _nid(ix: int, iz: int) -> int:
+	return (ix + 3) * 7 + (iz + 3)
+
+
+func _node_for(p: Vector2) -> int:
+	return _nid(clampi(roundi(p.x / BLOCK), -3, 3), clampi(roundi(p.y / BLOCK), -3, 3))
+
+
+# ---------------------------------------------------------------- world
+
 func _build_world() -> void:
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
@@ -94,7 +211,7 @@ func _build_world() -> void:
 	sun.rotation_degrees = Vector3(-50, 30, 0)
 	sun.shadow_enabled = true
 	sun.light_energy = 0.75
-	sun.directional_shadow_max_distance = 120.0
+	sun.directional_shadow_max_distance = 140.0
 	add_child(sun)
 
 	var ground := StaticBody3D.new()
@@ -141,6 +258,7 @@ func _build_city() -> void:
 		for j in range(-3, 3):
 			var c := Vector3(i * BLOCK + BLOCK / 2.0, 0, j * BLOCK + BLOCK / 2.0)
 			_box(c + Vector3(0, 0.03, 0), Vector3(40, 0.06, 40), walk_mat, false)
+			block_rects.append(Rect2(c.x - 20.0, c.z - 20.0, 40.0, 40.0))
 			for sx in [-10.0, 10.0]:
 				for sz in [-10.0, 10.0]:
 					if rng.randf() < 0.12:
@@ -150,55 +268,52 @@ func _build_city() -> void:
 						h = rng.randf_range(5.0, 10.0)
 					var bm: StandardMaterial3D = mats[rng.randi() % mats.size()]
 					_box(c + Vector3(sx, h / 2.0, sz), Vector3(17, h, 17), bm, true)
+					bld_rects.append(Rect2(c.x + sx - 8.5, c.z + sz - 8.5, 17.0, 17.0))
 
 	var line_mat := _mat(Color(0.95, 0.8, 0.2))
 	for k in range(-3, 4):
 		_box(Vector3(k * BLOCK, 0.02, 0), Vector3(0.3, 0.02, 340), line_mat, false)
 		_box(Vector3(0, 0.02, k * BLOCK), Vector3(340, 0.02, 0.3), line_mat, false)
 
-
-func _part(parent: Node3D, mesh: Mesh, pos: Vector3, mat: Material) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.position = pos
-	mi.material_override = mat
-	parent.add_child(mi)
-	return mi
-
-
-func _boxm(size: Vector3) -> BoxMesh:
-	var b := BoxMesh.new()
-	b.size = size
-	return b
+	for ix in range(-3, 4):
+		for iz in range(-3, 4):
+			astar.add_point(_nid(ix, iz), Vector2(ix * BLOCK, iz * BLOCK))
+	for ix in range(-3, 4):
+		for iz in range(-3, 4):
+			if ix < 3:
+				astar.connect_points(_nid(ix, iz), _nid(ix + 1, iz))
+			if iz < 3:
+				astar.connect_points(_nid(ix, iz), _nid(ix, iz + 1))
 
 
-func _spherem(r: float) -> SphereMesh:
-	var s := SphereMesh.new()
-	s.radius = r
-	s.height = r * 2.0
-	return s
+func _build_marker() -> void:
+	dest_marker = MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 1.2
+	cm.bottom_radius = 1.2
+	cm.height = 120.0
+	dest_marker.mesh = cm
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(1.0, 0.6, 0.1, 0.35)
+	dest_marker.material_override = m
+	dest_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	dest_marker.visible = false
+	add_child(dest_marker)
 
 
-func _limb(parent: Node3D, pivot_pos: Vector3, r: float, h: float, mat: Material) -> Node3D:
-	var pivot := Node3D.new()
-	pivot.position = pivot_pos
-	parent.add_child(pivot)
-	var cm := CapsuleMesh.new()
-	cm.radius = r
-	cm.height = h
-	_part(pivot, cm, Vector3(0, -h / 2.0, 0), mat)
-	return pivot
-
+# ---------------------------------------------------------------- player
 
 func _build_player() -> void:
 	player = CharacterBody3D.new()
-	var col := CollisionShape3D.new()
+	player_col = CollisionShape3D.new()
 	var cap := CapsuleShape3D.new()
 	cap.radius = 0.35
 	cap.height = 1.8
-	col.shape = cap
-	col.position.y = 0.9
-	player.add_child(col)
+	player_col.shape = cap
+	player_col.position.y = 0.9
+	player.add_child(player_col)
 	model = Node3D.new()
 	player.add_child(model)
 	player.position = Vector3(0, 0.1, 0)
@@ -272,6 +387,118 @@ func _find_anim(keys: Array) -> String:
 	return ""
 
 
+# ---------------------------------------------------------------- car
+
+func _build_car() -> void:
+	car = CharacterBody3D.new()
+	var col := CollisionShape3D.new()
+	var bx := BoxShape3D.new()
+	bx.size = Vector3(2.0, 1.3, CAR_LENGTH - 0.4)
+	col.shape = bx
+	col.position.y = 0.75
+	car.add_child(col)
+	car_visual = Node3D.new()
+	car.add_child(car_visual)
+
+	if ResourceLoader.exists(CAR_GLB_PATH):
+		_build_car_glb()
+	else:
+		_build_car_procedural()
+
+	car.position = Vector3(5, 0.1, -9)
+	add_child(car)
+
+
+func _build_car_procedural() -> void:
+	var paint := _mat(Color(0.8, 0.08, 0.08))
+	paint.metallic = 0.6
+	paint.roughness = 0.35
+	var glass := _mat(Color(0.08, 0.1, 0.14))
+	glass.metallic = 0.8
+	glass.roughness = 0.1
+	var dark := _mat(Color(0.05, 0.05, 0.05))
+	var hl := _mat(Color(1, 1, 0.85))
+	hl.emission_enabled = true
+	hl.emission = Color(1, 0.95, 0.7)
+	hl.emission_energy_multiplier = 2.0
+	var tl := _mat(Color(1, 0.1, 0.1))
+	tl.emission_enabled = true
+	tl.emission = Color(1, 0.05, 0.05)
+	tl.emission_energy_multiplier = 1.5
+
+	_part(car_visual, _boxm(Vector3(1.9, 0.55, 4.3)), Vector3(0, 0.62, 0), paint)
+	_part(car_visual, _boxm(Vector3(1.65, 0.5, 2.1)), Vector3(0, 1.14, 0.35), glass)
+	_part(car_visual, _boxm(Vector3(1.7, 0.06, 1.9)), Vector3(0, 1.42, 0.35), paint)
+	_part(car_visual, _boxm(Vector3(1.95, 0.2, 0.2)), Vector3(0, 0.4, -2.15), dark)
+	_part(car_visual, _boxm(Vector3(1.95, 0.2, 0.2)), Vector3(0, 0.4, 2.15), dark)
+	for sx in [-0.65, 0.65]:
+		_part(car_visual, _boxm(Vector3(0.4, 0.15, 0.08)), Vector3(sx, 0.72, -2.16), hl)
+		_part(car_visual, _boxm(Vector3(0.4, 0.15, 0.08)), Vector3(sx, 0.72, 2.16), tl)
+
+	var wpos := [
+		Vector3(-1.0, 0.38, -1.35), Vector3(1.0, 0.38, -1.35),
+		Vector3(-1.0, 0.38, 1.35), Vector3(1.0, 0.38, 1.35)
+	]
+	for wp in wpos:
+		var pivot := Node3D.new()
+		pivot.position = wp
+		car_visual.add_child(pivot)
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.38
+		cyl.bottom_radius = 0.38
+		cyl.height = 0.3
+		var mi := MeshInstance3D.new()
+		mi.mesh = cyl
+		mi.material_override = dark
+		mi.rotation_degrees = Vector3(0, 0, 90)
+		pivot.add_child(mi)
+		car_wheels.append(pivot)
+
+
+func _collect_aabb(n: Node, xf: Transform3D, acc: Array) -> void:
+	var t := xf
+	if n is Node3D:
+		t = xf * (n as Node3D).transform
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		if mi.mesh != null:
+			var a: AABB = t * mi.mesh.get_aabb()
+			if acc.is_empty():
+				acc.append(a)
+			else:
+				acc[0] = (acc[0] as AABB).merge(a)
+	for c in n.get_children():
+		_collect_aabb(c, t, acc)
+
+
+func _build_car_glb() -> void:
+	var scn: PackedScene = load(CAR_GLB_PATH)
+	var inst := scn.instantiate() as Node3D
+	var acc: Array = []
+	_collect_aabb(inst, Transform3D.IDENTITY, acc)
+	var holder := Node3D.new()
+	car_visual.add_child(holder)
+	holder.add_child(inst)
+	if acc.is_empty():
+		return
+	var bb: AABB = acc[0]
+	var base_yaw := 0.0
+	var length := bb.size.z
+	if bb.size.x > bb.size.z:
+		base_yaw = PI * 0.5
+		length = bb.size.x
+	var s := CAR_LENGTH / maxf(length, 0.001)
+	inst.position = Vector3(
+		-(bb.position.x + bb.size.x * 0.5),
+		-bb.position.y,
+		-(bb.position.z + bb.size.z * 0.5)
+	)
+	holder.scale = Vector3.ONE * s
+	holder.rotation.y = base_yaw + CAR_GLB_YAW
+
+
+# ---------------------------------------------------------------- UI
+
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	ui = Control.new()
@@ -281,39 +508,289 @@ func _build_ui() -> void:
 	layer.add_child(ui)
 
 	var lbl := Label.new()
-	lbl.text = "Phase 2"
+	lbl.text = "Phase 3"
 	lbl.position = Vector2(30, 20)
 	lbl.add_theme_font_size_override("font_size", 36)
 	layer.add_child(lbl)
+
+	mini = Control.new()
+	mini.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mini.clip_contents = true
+	mini.draw.connect(_draw_mini)
+	layer.add_child(mini)
+
+	big = Control.new()
+	big.set_anchors_preset(Control.PRESET_FULL_RECT)
+	big.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	big.draw.connect(_draw_big)
+	big.visible = false
+	layer.add_child(big)
+
 	add_child(layer)
 
 
-func _jump_center() -> Vector2:
-	return get_viewport().get_visible_rect().size - Vector2(170, 170)
+func _process(_delta: float) -> void:
+	var r := _mini_rect()
+	mini.position = r.position
+	mini.size = r.size
+	mini.queue_redraw()
+	ui.queue_redraw()
+	if map_open:
+		big.queue_redraw()
+	if arrived_t > 0.0:
+		arrived_t -= _delta
 
 
 func _draw_ui() -> void:
-	if stick_id != -1:
+	if stick_id != -1 and not map_open:
 		ui.draw_circle(stick_origin, RADIUS, Color(1, 1, 1, 0.15))
 		ui.draw_circle(stick_origin + stick_vec * RADIUS, 45.0, Color(1, 1, 1, 0.5))
+
 	var jc := _jump_center()
 	var a := 0.4 if jump_id != -1 else 0.18
 	ui.draw_circle(jc, 70.0, Color(1, 1, 1, a))
-	ui.draw_string(ThemeDB.fallback_font, jc + Vector2(-60, 10), "JUMP", HORIZONTAL_ALIGNMENT_CENTER, 120, 30)
+	_txt(ui, "BRAKE" if in_car else "JUMP", jc, 28)
+
+	if in_car or near_car:
+		var ac := _act_center()
+		ui.draw_circle(ac, 70.0, Color(0.2, 0.7, 1.0, 0.4))
+		_txt(ui, "EXIT" if in_car else "ENTER", ac, 28)
+
+	if in_car:
+		_draw_gauge()
+
+	var mr := _mini_rect()
+	if dest_set:
+		_txt(ui, "%d m" % int(_route_len()), Vector2(mr.position.x + mr.size.x * 0.5, mr.end.y + 28.0), 30, Color(1, 0.8, 0.2))
+	if arrived_t > 0.0:
+		_txt(ui, "ARRIVED", Vector2(_vp().x * 0.5, 120.0), 60, Color(0.4, 1, 0.5))
+
+
+func _draw_gauge() -> void:
+	var s := _vp()
+	var c := Vector2(s.x * 0.5, s.y - 160.0)
+	var r := 130.0
+	var kmh := absf(car_speed) * 3.6
+	var ratio := clampf(kmh / GAUGE_MAX, 0.0, 1.0)
+	var a0 := deg_to_rad(135.0)
+	var sweep := deg_to_rad(270.0)
+
+	ui.draw_circle(c, r + 16.0, Color(0.03, 0.04, 0.06, 0.75))
+	ui.draw_arc(c, r, a0, a0 + sweep, 64, Color(1, 1, 1, 0.18), 10.0, true)
+	ui.draw_arc(c, r, a0 + sweep * 0.82, a0 + sweep, 24, Color(0.9, 0.15, 0.15, 0.55), 10.0, true)
+	var col := Color(0.2, 0.85, 1.0).lerp(Color(1.0, 0.25, 0.2), clampf((ratio - 0.55) / 0.45, 0.0, 1.0))
+	if ratio > 0.005:
+		ui.draw_arc(c, r, a0, a0 + sweep * ratio, 64, col, 10.0, true)
+
+	for i in range(0, 12):
+		var f := float(i) / 11.0
+		var ang := a0 + sweep * f
+		var dir := Vector2(cos(ang), sin(ang))
+		ui.draw_line(c + dir * (r - 28.0), c + dir * (r - 8.0), Color(1, 1, 1, 0.9), 3.0, true)
+		if i % 2 == 0:
+			_txt(ui, str(i * 20), c + dir * (r - 50.0), 20, Color(1, 1, 1, 0.85))
+		if i < 11:
+			var ang2 := a0 + sweep * ((float(i) + 0.5) / 11.0)
+			var d2 := Vector2(cos(ang2), sin(ang2))
+			ui.draw_line(c + d2 * (r - 18.0), c + d2 * (r - 8.0), Color(1, 1, 1, 0.5), 2.0, true)
+
+	var na := a0 + sweep * ratio
+	var nd := Vector2(cos(na), sin(na))
+	ui.draw_line(c - nd * 14.0, c + nd * (r - 20.0), Color(1, 0.3, 0.2), 5.0, true)
+	ui.draw_circle(c, 14.0, Color(0.15, 0.15, 0.18))
+	ui.draw_circle(c, 7.0, Color(1, 0.3, 0.2))
+
+	var g := "N"
+	var gc := Color(1, 1, 1, 0.6)
+	if car_speed > 0.8:
+		g = "D"
+		gc = Color(0.3, 1, 0.5)
+	elif car_speed < -0.8:
+		g = "R"
+		gc = Color(1, 0.6, 0.2)
+	_txt(ui, g, c + Vector2(0, -48), 36, gc)
+	_txt(ui, str(int(kmh)), c + Vector2(0, 56), 58)
+	_txt(ui, "KM/H", c + Vector2(0, 96), 20, Color(1, 1, 1, 0.6))
+
+
+func _draw_map_content(c: Control, origin: Vector2, w_off: Vector2, sc: float, k: float, bounds: Rect2) -> void:
+	for r in block_rects:
+		c.draw_rect(Rect2(origin + (r.position + w_off) * sc, r.size * sc), Color(0.28, 0.3, 0.34))
+	for r in bld_rects:
+		c.draw_rect(Rect2(origin + (r.position + w_off) * sc, r.size * sc), Color(0.5, 0.55, 0.62))
+
+	if route.size() >= 2:
+		var pts := PackedVector2Array()
+		for v in route:
+			pts.append(origin + (v + w_off) * sc)
+		c.draw_polyline(pts, Color(1.0, 0.78, 0.15), 4.0 * k, true)
+
+	if dest_set:
+		var dp := origin + (dest + w_off) * sc
+		dp = Vector2(
+			clampf(dp.x, bounds.position.x + 12.0, bounds.end.x - 12.0),
+			clampf(dp.y, bounds.position.y + 12.0, bounds.end.y - 12.0)
+		)
+		c.draw_circle(dp, 10.0 * k, Color(1, 0.3, 0.2))
+		c.draw_circle(dp, 4.0 * k, Color.WHITE)
+
+	if not in_car:
+		var cp := origin + (Vector2(car.position.x, car.position.z) + w_off) * sc
+		c.draw_rect(Rect2(cp - Vector2(6, 6) * k, Vector2(12, 12) * k), Color(1, 0.2, 0.2))
+
+	var p3 := car.position if in_car else player.position
+	var pp := origin + (Vector2(p3.x, p3.z) + w_off) * sc
+	var yaw := car.rotation.y if in_car else model.rotation.y
+	var d := Vector2(-sin(yaw), -cos(yaw))
+	var perp := Vector2(-d.y, d.x)
+	var tri := PackedVector2Array([
+		pp + d * 16.0 * k,
+		pp - d * 10.0 * k + perp * 10.0 * k,
+		pp - d * 10.0 * k - perp * 10.0 * k
+	])
+	c.draw_colored_polygon(tri, Color(0.2, 0.85, 1.0))
+
+
+func _draw_mini() -> void:
+	var sz := mini.size
+	var ctr := sz * 0.5
+	var p3 := car.position if in_car else player.position
+	var ppos := Vector2(p3.x, p3.z)
+	var sc := sz.x / 170.0
+	mini.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.1, 0.12, 0.15))
+	_draw_map_content(mini, ctr, -ppos, sc, 1.0, Rect2(Vector2.ZERO, sz))
+	mini.draw_rect(Rect2(Vector2.ZERO, sz), Color(1, 1, 1, 0.85), false, 4.0)
+	_txt(mini, "N", Vector2(sz.x * 0.5, 22.0), 24)
+	var ic := Vector2(sz.x - 34.0, sz.y - 34.0)
+	mini.draw_rect(Rect2(ic - Vector2(22, 22), Vector2(44, 44)), Color(0, 0, 0, 0.6))
+	mini.draw_line(ic + Vector2(-10, 0), ic + Vector2(10, 0), Color.WHITE, 4.0)
+	mini.draw_line(ic + Vector2(0, -10), ic + Vector2(0, 10), Color.WHITE, 4.0)
+
+
+func _draw_big() -> void:
+	var s := _vp()
+	var br := _big_rect()
+	var sc := br.size.x / (MAP_HALF * 2.0)
+	big.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.82))
+	big.draw_rect(br, Color(0.1, 0.12, 0.15))
+	_draw_map_content(big, br.position, Vector2(MAP_HALF, MAP_HALF), sc, 1.7, br)
+	big.draw_rect(br, Color(1, 1, 1, 0.9), false, 4.0)
+
+	var cr := _close_rect()
+	big.draw_rect(cr, Color(0.8, 0.2, 0.2, 0.9))
+	_txt(big, "CLOSE", cr.position + cr.size * 0.5, 36)
+	var kr := _clear_rect()
+	big.draw_rect(kr, Color(0.25, 0.3, 0.4, 0.9))
+	_txt(big, "CLEAR", kr.position + kr.size * 0.5, 36)
+
+	var lx := br.position.x * 0.5
+	_txt(big, "TAP THE MAP", Vector2(lx, 200.0), 40)
+	_txt(big, "TO PICK A DESTINATION", Vector2(lx, 250.0), 28, Color(1, 1, 1, 0.7))
+	if dest_set:
+		_txt(big, "%d m" % int(_route_len()), Vector2(lx, 340.0), 64, Color(1, 0.8, 0.2))
+
+
+# ---------------------------------------------------------------- map logic
+
+func _set_map(open: bool) -> void:
+	map_open = open
+	big.visible = open
+	if open:
+		stick_id = -1
+		stick_vec = Vector2.ZERO
+		look_id = -1
+		jump_id = -1
+
+
+func _set_dest(w: Vector2) -> void:
+	dest = Vector2(clampf(w.x, -MAP_HALF, MAP_HALF), clampf(w.y, -MAP_HALF, MAP_HALF))
+	dest_set = true
+	dest_marker.position = Vector3(dest.x, 60.0, dest.y)
+	dest_marker.visible = true
+	_update_route()
+
+
+func _clear_route() -> void:
+	dest_set = false
+	route.clear()
+	dest_marker.visible = false
+
+
+func _update_route() -> void:
+	if not dest_set:
+		return
+	var p3 := car.position if in_car else player.position
+	var p := Vector2(p3.x, p3.z)
+	var path := astar.get_point_path(_node_for(p), _node_for(dest))
+	route.clear()
+	route.append(p)
+	var start_i := 0
+	if path.size() >= 2:
+		var seg := path[1] - path[0]
+		var t := (p - path[0]).dot(seg) / seg.length_squared()
+		if t > 0.0 and t < 1.0 and (path[0] + seg * t).distance_to(p) < 9.0:
+			start_i = 1
+	for i in range(start_i, path.size()):
+		route.append(path[i])
+	route.append(dest)
+
+
+func _route_len() -> float:
+	var total := 0.0
+	for i in range(route.size() - 1):
+		total += route[i].distance_to(route[i + 1])
+	return total
+
+
+# ---------------------------------------------------------------- input
+
+func _toggle_car() -> void:
+	if in_car:
+		in_car = false
+		player.position = car.position + car.global_transform.basis.x * 2.6 + Vector3(0, 0.3, 0)
+		player.velocity = Vector3.ZERO
+		player.visible = true
+		player_col.set_deferred("disabled", false)
+		model.rotation.y = car.rotation.y
+		cam_pitch = 0.85
+	else:
+		in_car = true
+		player.visible = false
+		player_col.set_deferred("disabled", true)
+		cam_pitch = 0.5
+		cam_yaw = car.rotation.y
 
 
 func _input(event: InputEvent) -> void:
-	var half := get_viewport().get_visible_rect().size.x * 0.5
+	var half := _vp().x * 0.5
 	if event is InputEventScreenTouch:
+		var p: Vector2 = event.position
 		if event.pressed:
-			if event.position.distance_to(_jump_center()) < 100.0:
+			if map_open:
+				if _close_rect().has_point(p):
+					_set_map(false)
+				elif _clear_rect().has_point(p):
+					_clear_route()
+				elif _big_rect().has_point(p):
+					var sc := _big_rect().size.x / (MAP_HALF * 2.0)
+					_set_dest((p - _big_rect().position) / sc - Vector2(MAP_HALF, MAP_HALF))
+				return
+			if _mini_rect().has_point(p):
+				_set_map(true)
+				return
+			if (in_car or near_car) and p.distance_to(_act_center()) < 95.0:
+				_toggle_car()
+				return
+			if p.distance_to(_jump_center()) < 100.0:
 				jump_id = event.index
-				want_jump = true
-			elif event.position.x < half and stick_id == -1:
+				if not in_car:
+					want_jump = true
+				return
+			if p.x < half and stick_id == -1:
 				stick_id = event.index
-				stick_origin = event.position
+				stick_origin = p
 				stick_vec = Vector2.ZERO
-			elif event.position.x >= half and look_id == -1:
+			elif p.x >= half and look_id == -1:
 				look_id = event.index
 		else:
 			if event.index == stick_id:
@@ -323,21 +800,46 @@ func _input(event: InputEvent) -> void:
 				look_id = -1
 			elif event.index == jump_id:
 				jump_id = -1
-		ui.queue_redraw()
 	elif event is InputEventScreenDrag:
+		if map_open:
+			return
 		if event.index == stick_id:
 			stick_vec = (event.position - stick_origin).limit_length(RADIUS) / RADIUS
 		elif event.index == look_id:
 			cam_yaw -= event.relative.x * 0.005
-			cam_pitch = clampf(cam_pitch + event.relative.y * 0.004, 0.25, 1.35)
-		ui.queue_redraw()
+			cam_pitch = clampf(cam_pitch + event.relative.y * 0.004, 0.2, 1.35)
 
+
+# ---------------------------------------------------------------- physics
 
 func _physics_process(delta: float) -> void:
 	time += delta
 	var input := stick_vec
 	if input == Vector2.ZERO:
 		input = Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+
+	near_car = (not in_car) and player.position.distance_to(car.position) < 5.0
+
+	if in_car:
+		_drive(delta, input, true, jump_id != -1)
+		player.position = car.position
+	else:
+		_drive(delta, Vector2.ZERO, false, true)
+		_walk(delta, input)
+
+	_update_camera(delta)
+
+	route_timer += delta
+	if dest_set and route_timer > 0.4:
+		route_timer = 0.0
+		_update_route()
+		var p3 := car.position if in_car else player.position
+		if Vector2(p3.x, p3.z).distance_to(dest) < 10.0:
+			_clear_route()
+			arrived_t = 3.0
+
+
+func _walk(delta: float, input: Vector2) -> void:
 	var mag := minf(input.length(), 1.0)
 	var dir := Vector3(input.x, 0, input.y).rotated(Vector3.UP, cam_yaw)
 
@@ -366,11 +868,81 @@ func _physics_process(delta: float) -> void:
 
 	_animate(delta, player.is_on_floor())
 
-	var tgt := player.position + Vector3(0, 1.8, 0)
-	var off := Vector3(0, 0, 10).rotated(Vector3.RIGHT, -cam_pitch).rotated(Vector3.UP, cam_yaw)
-	cam.position = cam.position.lerp(tgt + off, 1.0 - exp(-14.0 * delta))
-	cam.look_at(tgt)
 
+func _drive(delta: float, input: Vector2, driven: bool, handbrake: bool) -> void:
+	var prev_speed := car_speed
+	var ratio := clampf(absf(car_speed) / CAR_MAX, 0.0, 1.0)
+	var throttle := -input.y if driven else 0.0
+	var steer_in := input.x if driven else 0.0
+	steer_in = steer_in * 0.6 + steer_in * absf(steer_in) * 0.4
+
+	if throttle > 0.05:
+		if car_speed < -0.5:
+			car_speed = move_toward(car_speed, 0.0, CAR_BRAKE * delta)
+		else:
+			car_speed += CAR_ACCEL * throttle * (1.0 - ratio * ratio) * delta
+	elif throttle < -0.05:
+		if car_speed > 0.5:
+			car_speed = move_toward(car_speed, 0.0, CAR_BRAKE * (-throttle) * delta)
+		else:
+			car_speed = move_toward(car_speed, -12.0 * (-throttle), 8.0 * delta)
+	else:
+		car_speed = move_toward(car_speed, 0.0, 5.0 * delta)
+
+	if handbrake:
+		car_speed = move_toward(car_speed, 0.0, (28.0 if driven else 14.0) * delta)
+	car_speed = clampf(car_speed, -14.0, CAR_MAX)
+
+	var max_steer := lerpf(0.55, 0.09, pow(ratio, 0.6))
+	car_steer = lerpf(car_steer, steer_in * max_steer, 1.0 - exp(-10.0 * delta))
+	var rot_rate := car_speed / WHEELBASE * tan(car_steer)
+	if handbrake and driven and absf(car_speed) > 8.0:
+		rot_rate *= 1.6
+	car.rotation.y -= rot_rate * delta
+
+	var f := -car.global_transform.basis.z
+	car.velocity.x = f.x * car_speed
+	car.velocity.z = f.z * car_speed
+	if car.is_on_floor():
+		car.velocity.y = -1.0
+	else:
+		car.velocity.y -= GRAVITY * delta
+	car.move_and_slide()
+	car_speed = car.velocity.dot(f)
+
+	var accel := (car_speed - prev_speed) / maxf(delta, 0.0001)
+	car_accel_s = lerpf(car_accel_s, clampf(accel, -30.0, 30.0), 1.0 - exp(-6.0 * delta))
+	car_visual.rotation.x = car_accel_s * 0.0035
+	car_visual.rotation.z = lerpf(car_visual.rotation.z, car_steer * ratio * 0.25, 1.0 - exp(-8.0 * delta))
+
+	for i in car_wheels.size():
+		var w := car_wheels[i]
+		w.rotation.x = fmod(w.rotation.x - car_speed * delta / 0.38, TAU)
+		if i < 2:
+			w.rotation.y = -car_steer
+
+
+func _update_camera(delta: float) -> void:
+	var ratio := clampf(absf(car_speed) / CAR_MAX, 0.0, 1.0)
+	var base := car.position if in_car else player.position
+	var dist := 10.0
+	var h := 1.8
+	var follow := 14.0
+	if in_car:
+		dist = 12.0 + ratio * 2.0
+		h = 1.6
+		follow = 18.0
+		if look_id == -1:
+			cam_yaw = lerp_angle(cam_yaw, car.rotation.y, 1.0 - exp(-2.5 * delta))
+	var tgt := base + Vector3(0, h, 0)
+	var off := Vector3(0, 0, dist).rotated(Vector3.RIGHT, -cam_pitch).rotated(Vector3.UP, cam_yaw)
+	cam.position = cam.position.lerp(tgt + off, 1.0 - exp(-follow * delta))
+	cam.look_at(tgt)
+	var fov_t := 70.0 + (14.0 * ratio if in_car else 0.0)
+	cam.fov = lerpf(cam.fov, fov_t, 1.0 - exp(-4.0 * delta))
+
+
+# ---------------------------------------------------------------- animation
 
 func _animate(delta: float, on_floor: bool) -> void:
 	if anim_player != null:
