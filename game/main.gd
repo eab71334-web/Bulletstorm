@@ -17,6 +17,9 @@ const PHONE_GLB_PATH := "res://game/phone.glb"
 const PHONE_GLB_YAW := 0.0
 const GUN_HAND_POS := Vector3(0.0, 0.08, 0.02)
 const GUN_HAND_ROT := Vector3(90.0, 0.0, 0.0)
+const ANIM_DIR := "res://game/anims/"
+const WEAPON_ANIM_TAGS := [[], ["pistol", "w1"], ["smg", "w2"], ["shotgun", "w3"], ["rifle", "w4"]]
+const ARM_POSE := [[0.0, 0.0, 0.0], [1.5, 0.2, 0.0], [1.45, 1.2, 0.08], [1.3, 1.0, 0.1], [1.55, 1.35, 0.12]]
 
 const CAR_LENGTH := 5.4
 const POLICE_LENGTH := 5.2
@@ -149,6 +152,12 @@ var a_run := ""
 var a_jump := ""
 var a_aim := ""
 var a_cur := ""
+var weapon_anims := {}
+var fire_anim_t := 0.0
+var raise_t := 0.0
+var prev_armed := false
+var hand_bone_name := ""
+var anim_notes := ""
 
 var car: CharacterBody3D
 var car_visual: Node3D
@@ -231,6 +240,9 @@ func _ready() -> void:
 	_set_weapon(1, false)
 	for i in PED_COUNT:
 		_spawn_ped()
+	var hb := hand_bone_name if hand_bone_name != "" else "NOT FOUND"
+	var an := anim_notes if anim_notes != "" else "none"
+	_toast("HAND: %s  |  ANIMS: %s" % [hb, an], 9.0)
 
 
 # ---------------------------------------------------------------- helpers
@@ -317,9 +329,9 @@ func _txt(c: Control, t: String, p: Vector2, size: int, col: Color = Color.WHITE
 	c.draw_string(ThemeDB.fallback_font, p + Vector2(-150.0, size * 0.35), t, HORIZONTAL_ALIGNMENT_CENTER, 300, size, col)
 
 
-func _toast(m: String) -> void:
+func _toast(m: String, t: float = 2.5) -> void:
 	toast_msg = m
-	toast_t = 2.5
+	toast_t = t
 
 
 func _box(pos: Vector3, size: Vector3, mat: Material, solid: bool) -> void:
@@ -563,6 +575,169 @@ func _ped_play(p: Ped, want: String) -> void:
 	p.anim.play(want, 0.2)
 
 
+# ---------------------------------------------------------------- external animations
+
+func _norm_bone(n: String) -> String:
+	var l := n.to_lower()
+	if l.contains(":"):
+		l = l.get_slice(":", l.get_slice_count(":") - 1)
+	l = l.replace("mixamorig", "")
+	var out := ""
+	for ch in l:
+		if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9"):
+			out += ch
+	return out
+
+
+func _anim_parse(low: String) -> Array:
+	var skip := ["crouch", "offset", "d90", "u90", "root_motion", "bwd", "back", "left", "right", "strafe", "turn"]
+	for s in skip:
+		if low.contains(s):
+			return []
+	var widx := 0
+	for i in range(1, WEAPONS.size()):
+		for tag in WEAPON_ANIM_TAGS[i]:
+			if low.contains(String(tag)):
+				widx = i
+	var base := ""
+	if low.contains("raise") or low.contains("draw") or low.contains("equip") or low.contains("unholster"):
+		base = "raise"
+	elif low.contains("fire") or low.contains("shoot"):
+		base = "fire"
+	elif low.contains("aim"):
+		base = "aim"
+	elif low.contains("idle"):
+		base = "idle"
+	elif low.contains("jump") or low.contains("fall"):
+		base = "jump"
+	elif low.contains("sprint") or low.contains("run") or low.contains("jog"):
+		base = "run"
+	elif low.contains("walk"):
+		base = "walk"
+	if base == "":
+		return []
+	return [widx, base]
+
+
+func _wa(w: int, base: String) -> String:
+	return String(weapon_anims.get("%d_%s" % [w, base], ""))
+
+
+func _any(base: String) -> String:
+	for i in range(1, WEAPONS.size()):
+		var n := _wa(i, base)
+		if n != "":
+			return n
+	return ""
+
+
+func _first(list: Array) -> String:
+	for s in list:
+		if String(s) != "":
+			return String(s)
+	return ""
+
+
+func _load_external_anims() -> void:
+	if anim_player == null or char_skeleton == null:
+		return
+	if not DirAccess.dir_exists_absolute(ANIM_DIR):
+		return
+	if not anim_player.has_animation_library(""):
+		anim_player.add_animation_library("", AnimationLibrary.new())
+	var lib := anim_player.get_animation_library("")
+	var root := anim_player.get_node(anim_player.root_node)
+	var sk_path := str(root.get_path_to(char_skeleton))
+	var bone_map := {}
+	for i in char_skeleton.get_bone_count():
+		var bn := char_skeleton.get_bone_name(i)
+		bone_map[_norm_bone(bn)] = bn
+
+	var seen := {}
+	var kept := 0
+	var total := 0
+	var keys: Array = []
+	for f in DirAccess.get_files_at(ANIM_DIR):
+		var fn := String(f)
+		if fn.ends_with(".import"):
+			fn = fn.trim_suffix(".import")
+		elif fn.ends_with(".remap"):
+			fn = fn.trim_suffix(".remap")
+		var low := fn.to_lower()
+		if not (low.ends_with(".fbx") or low.ends_with(".glb") or low.ends_with(".gltf")):
+			continue
+		if seen.has(fn):
+			continue
+		seen[fn] = true
+		var parsed := _anim_parse(low)
+		if parsed.is_empty():
+			continue
+		var key := "%d_%s" % [parsed[0], parsed[1]]
+		if weapon_anims.has(key):
+			continue
+		var scn := load(ANIM_DIR + fn) as PackedScene
+		if scn == null:
+			continue
+		var inst := scn.instantiate()
+		var src := inst.find_child("AnimationPlayer", true, false) as AnimationPlayer
+		if src == null:
+			inst.free()
+			continue
+		var best: Animation = null
+		for n in src.get_animation_list():
+			if String(n) == "RESET":
+				continue
+			var a := src.get_animation(n)
+			if best == null or a.length > best.length:
+				best = a
+		if best == null:
+			inst.free()
+			continue
+		var anim := best.duplicate() as Animation
+		inst.free()
+		total += anim.get_track_count()
+		for t in range(anim.get_track_count() - 1, -1, -1):
+			var ttype := anim.track_get_type(t)
+			var tp := anim.track_get_path(t)
+			if ttype != Animation.TYPE_ROTATION_3D or tp.get_subname_count() == 0:
+				anim.remove_track(t)
+				continue
+			var nb := _norm_bone(tp.get_subname(0))
+			if not bone_map.has(nb):
+				anim.remove_track(t)
+				continue
+			anim.track_set_path(t, NodePath(sk_path + ":" + String(bone_map[nb])))
+		kept += anim.get_track_count()
+		var looped := String(parsed[1]) in ["idle", "aim", "walk", "run"]
+		anim.loop_mode = Animation.LOOP_LINEAR if looped else Animation.LOOP_NONE
+		var aname := "x_" + key
+		lib.add_animation(aname, anim)
+		weapon_anims[key] = aname
+		keys.append(key)
+
+	var g := _wa(0, "idle")
+	if g != "":
+		a_idle = g
+	g = _wa(0, "walk")
+	if g != "":
+		a_walk = g
+	g = _wa(0, "run")
+	if g != "":
+		a_run = g
+	g = _wa(0, "jump")
+	if g != "":
+		a_jump = g
+	g = _wa(0, "aim")
+	if g != "":
+		a_aim = g
+	if a_run == "":
+		a_run = a_walk
+	if keys.is_empty():
+		anim_notes = "none (0/%d)" % total
+	else:
+		anim_notes = ", ".join(PackedStringArray(keys)) + " (%d/%d)" % [kept, total]
+
+
 # ---------------------------------------------------------------- world
 
 func _build_world() -> void:
@@ -745,6 +920,9 @@ func _build_glb() -> void:
 	model.add_child(holder)
 	char_skeleton = _find_skeleton(holder)
 	anim_player = holder.find_child("AnimationPlayer", true, false) as AnimationPlayer
+	if anim_player == null and char_skeleton != null:
+		anim_player = AnimationPlayer.new()
+		holder.add_child(anim_player)
 	if anim_player == null:
 		return
 	a_idle = _find_anim(anim_player, ["idle"])
@@ -756,6 +934,7 @@ func _build_glb() -> void:
 		a_run = a_walk
 	for n in [a_idle, a_walk, a_run, a_aim]:
 		_set_loop(anim_player, n)
+	_load_external_anims()
 
 
 func _attach_holdables() -> void:
@@ -772,6 +951,7 @@ func _attach_holdables() -> void:
 			pos = GUN_HAND_POS
 			rot = GUN_HAND_ROT
 			hand_scaled = true
+			hand_bone_name = hb
 	elif arm_r != null:
 		parent = arm_r
 		pos = Vector3(0, -0.52, 0)
@@ -1477,6 +1657,7 @@ func _set_weapon(i: int, show: bool = true) -> void:
 			gun_mesh.visible = true
 		if show:
 			aim_t = 3.0
+			prev_armed = false
 
 
 func _aim_point(rng: float) -> Vector3:
@@ -1595,6 +1776,9 @@ func _try_fire(delta: float) -> void:
 				_damage_ped(o, float(w["dmg"]))
 		return
 
+	fire_anim_t = 0.3
+	if _wa(cur_weapon, "fire") != "":
+		a_cur = ""
 	ammo_mag[cur_weapon] -= 1
 	_alarm(player.position, 30.0)
 	_spark(origin + dir * 0.8, Color(1, 0.85, 0.3), 0.12, 0.05)
@@ -1676,7 +1860,7 @@ func _build_ui() -> void:
 	layer.add_child(ui)
 
 	var lbl := Label.new()
-	lbl.text = "Phase 5"
+	lbl.text = "Phase 6"
 	lbl.position = Vector2(30, 20)
 	lbl.add_theme_font_size_override("font_size", 36)
 	layer.add_child(lbl)
@@ -1820,7 +2004,7 @@ func _draw_ui() -> void:
 	if arrived_t > 0.0:
 		_txt(ui, "ARRIVED", Vector2(s.x * 0.5, 150.0), 60, Color(0.4, 1, 0.5))
 	if toast_t > 0.0:
-		_txt(ui, toast_msg, Vector2(s.x * 0.5, 230.0), 44, Color(1, 1, 1, clampf(toast_t, 0.0, 1.0)))
+		ui.draw_string(ThemeDB.fallback_font, Vector2(s.x * 0.5 - 600.0, 250.0), toast_msg, HORIZONTAL_ALIGNMENT_CENTER, 1200, 38, Color(1, 1, 1, clampf(toast_t, 0.0, 1.0)))
 
 	if dead:
 		ui.draw_rect(Rect2(Vector2.ZERO, s), Color(0.4, 0, 0, 0.5))
@@ -2226,6 +2410,14 @@ func _physics_process(delta: float) -> void:
 	aim_t = maxf(aim_t - delta, 0.0)
 	punch_t = maxf(punch_t - delta, 0.0)
 	hurt_flash = maxf(hurt_flash - delta, 0.0)
+	fire_anim_t = maxf(fire_anim_t - delta, 0.0)
+	raise_t = maxf(raise_t - delta, 0.0)
+
+	var armed_now := aim_t > 0.0 and cur_weapon > 0 and not in_car
+	if armed_now and not prev_armed:
+		raise_t = 0.5
+		a_cur = ""
+	prev_armed = armed_now
 
 	var input := stick_vec
 	if input == Vector2.ZERO:
@@ -2407,6 +2599,7 @@ func _animate(delta: float, on_floor: bool) -> void:
 		return
 
 	var k := 1.0 - exp(-18.0 * delta)
+	var ka := 1.0 - exp(-9.0 * delta)
 
 	if not on_floor:
 		leg_l.rotation.x = lerpf(leg_l.rotation.x, 0.9, k)
@@ -2433,8 +2626,10 @@ func _animate(delta: float, on_floor: bool) -> void:
 	var arm_l_t := -swing * 1.1 + sway
 	var arm_r_t := swing * 1.1 - sway
 	if aim_t > 0.0 and cur_weapon > 0:
-		arm_r_t = 1.5
-		arm_l_t = 1.2
+		var pose: Array = ARM_POSE[cur_weapon]
+		arm_r_t = float(pose[0]) + fire_anim_t * 0.5
+		arm_l_t = float(pose[1]) + fire_anim_t * 0.3
+		lean = maxf(lean, float(pose[2]))
 	if phone_open:
 		arm_r_t = 1.2
 	if punch_t > 0.0:
@@ -2442,29 +2637,59 @@ func _animate(delta: float, on_floor: bool) -> void:
 
 	leg_l.rotation.x = lerpf(leg_l.rotation.x, swing, k)
 	leg_r.rotation.x = lerpf(leg_r.rotation.x, -swing, k)
-	arm_l.rotation.x = lerpf(arm_l.rotation.x, arm_l_t, k)
-	arm_r.rotation.x = lerpf(arm_r.rotation.x, arm_r_t, k)
+	arm_l.rotation.x = lerpf(arm_l.rotation.x, arm_l_t, ka)
+	arm_r.rotation.x = lerpf(arm_r.rotation.x, arm_r_t, ka)
 	torso.rotation.x = lerpf(torso.rotation.x, -lean, k)
 	torso.rotation.y = lerpf(torso.rotation.y, twist, k)
 	hips.position.y = 0.95 * cos(leg_l.rotation.x)
 
 
 func _animate_glb(on_floor: bool) -> void:
-	var want := a_idle
-	if aim_t > 0.0 and cur_weapon > 0 and a_aim != "":
-		want = a_aim
-	elif not on_floor and a_jump != "":
-		want = a_jump
-	elif speed > 5.5 and a_run != "":
-		want = a_run
-	elif speed > 0.5 and a_walk != "":
-		want = a_walk
+	var w := cur_weapon
+	var armed := aim_t > 0.0 and w > 0
+	var run := speed > 5.5
+	var walk := speed > 0.5
+	var want := ""
+
+	if armed:
+		if raise_t > 0.0:
+			want = _wa(w, "raise")
+		if want == "" and fire_anim_t > 0.0:
+			want = _wa(w, "fire")
+		if want == "":
+			if run:
+				want = _first([_wa(w, "run"), _wa(w, "walk"), a_run, a_walk])
+			elif walk:
+				want = _first([_wa(w, "walk"), _wa(w, "run"), a_walk, a_run])
+			else:
+				want = _first([_wa(w, "aim"), _wa(w, "idle"), a_aim, a_idle])
+
+	if want == "":
+		if not on_floor and a_jump != "":
+			want = a_jump
+		elif run:
+			want = _first([a_run, a_walk, _any("run"), _any("walk")])
+		elif walk:
+			want = _first([a_walk, a_run, _any("walk"), _any("run")])
+		else:
+			want = _first([a_idle, _any("idle"), _any("aim")])
+
+	var frozen := false
+	if want == "":
+		want = _first([a_walk, a_run, _any("walk"), _any("run")])
+		frozen = want != ""
+
 	if want != "" and want != a_cur:
 		a_cur = want
-		anim_player.play(want, 0.2)
-	if a_cur != "" and a_cur == a_walk:
+		anim_player.play(want, 0.15)
+		if frozen:
+			anim_player.seek(0.0, true)
+
+	if frozen:
+		anim_player.speed_scale = 0.0
+	elif a_cur != "" and (a_cur == a_walk or a_cur == _wa(w, "walk")):
 		anim_player.speed_scale = clampf(speed / 2.5, 0.6, 1.6)
-	elif a_cur != "" and a_cur == a_run:
+	elif a_cur != "" and (a_cur == a_run or a_cur == _wa(w, "run")):
 		anim_player.speed_scale = clampf(speed / 7.0, 0.8, 1.4)
 	else:
 		anim_player.speed_scale = 1.0
