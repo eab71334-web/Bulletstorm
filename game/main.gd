@@ -270,6 +270,7 @@ var sb_icons: Array[StyleBoxFlat] = []
 var sb_pill: StyleBoxFlat
 var sb_btn: StyleBoxFlat
 var sb_map: StyleBoxFlat
+var extras = null
 
 
 func _ready() -> void:
@@ -296,6 +297,10 @@ func _ready() -> void:
 	if anim_total > 0 and anim_kept * 2 < anim_total:
 		lines.append("ANIM BONE: %s | CHAR BONE: %s" % [dbg_anim_bone, dbg_char_bone])
 	_toast("\n".join(PackedStringArray(lines)), 12.0)
+	extras = Node.new()
+	extras.set_script(load("res://game/ext"))
+	extras.set("g", self)
+	add_child(extras)
 
 
 # ---------------------------------------------------------------- helpers
@@ -2856,9 +2861,7 @@ func _set_wheel(open: bool) -> void:
 
 func _set_phone(open: bool) -> void:
 	phone_open = open
-	phone.visible = open
-	if open:
-		_clear_touch_ids()
+	phone.visible = false
 
 
 func _phone_tap(p: Vector2) -> void:
@@ -2993,16 +2996,13 @@ func _input(event: InputEvent) -> void:
 						break
 				_set_wheel(false)
 				return
-			if phone_open:
-				_phone_tap(p)
-				return
 			if dead:
 				return
 			if _mini_rect().has_point(p):
 				_set_map(true)
 				return
 			if p.distance_to(_phone_btn_center()) < 70.0:
-				_set_phone(true)
+				_set_phone(not phone_open)
 				return
 			if (in_car or near_car) and p.distance_to(_act_center()) < 95.0:
 				_toggle_car()
