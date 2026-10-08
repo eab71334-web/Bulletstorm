@@ -20,6 +20,9 @@ const BULLET_GLB_SPEED := 90.0
 const BULLET_LEN := 0.35
 const PHONE_GLB_PATH := "res://game/phone.glb"
 const PHONE_GLB_YAW := 0.0
+const PHONE_HAND_POS := Vector3(0.0, 0.07, 0.03)
+const PHONE_HAND_ROT := Vector3(0.0, 0.0, 0.0)
+const PHONE_X_FRAC := 0.70
 const ANIM_DIR := "res://game/anims/"
 const SND_DIR := "res://game/sounds/"
 const GUN_HAND_POS := Vector3(0.0, 0.08, 0.02)
@@ -66,7 +69,114 @@ const DEFAULT_RES := [0, 60, 180, 24, 120]
 const RECOIL := [0.0, 0.035, 0.012, 0.06, 0.02]
 const FLASH_SIZE := [0.0, 0.8, 1.0, 1.5, 1.2]
 const TRACER_COL := [Color.WHITE, Color(1.0, 0.85, 0.45), Color(1.0, 0.7, 0.3), Color(1.0, 0.9, 0.6), Color(1.0, 0.95, 0.7)]
-const APP_NAMES := ["MAP", "MY CAR", "GUNS", "TAXI"]
+const APP_NAMES := ["MAP", "MY CAR", "GUNS", "TAXI", "CAMERA", "PHOTOS", "CLOCK", "STORE", "SETTINGS"]
+
+
+class ArmIK extends SkeletonModifier3D:
+	var ok := false
+	var b_ur := -1
+	var b_fr := -1
+	var b_hr := -1
+	var b_ul := -1
+	var b_fl := -1
+	var b_hl := -1
+	var rmode := 0
+	var lmode := 0
+	var rw := 0.0
+	var lw := 0.0
+	var aim_dir := Vector3.FORWARD
+	var fwd := Vector3.FORWARD
+	var side := Vector3.RIGHT
+
+	func setup(sk: Skeleton3D) -> void:
+		var re := RegEx.new()
+		re.compile("[_.]\\d+$")
+		for i in sk.get_bone_count():
+			var l := re.sub(sk.get_bone_name(i).to_lower(), "")
+			if l.contains("thumb") or l.contains("index") or l.contains("middle") or l.contains("ring") or l.contains("pinky") or l.contains("finger"):
+				continue
+			if l.contains("twist") or l.contains("roll") or l.contains("helper") or l.contains("shoulder") or l.contains("clav"):
+				continue
+			var right := l.contains("right") or l.ends_with("_r") or l.ends_with(".r") or l.contains("_r_")
+			var left := l.contains("left") or l.ends_with("_l") or l.ends_with(".l") or l.contains("_l_")
+			if not right and not left:
+				continue
+			var role := ""
+			if l.contains("forearm") or l.contains("lowerarm") or l.contains("fore_arm"):
+				role = "f"
+			elif l.contains("hand"):
+				role = "h"
+			elif l.contains("arm"):
+				role = "u"
+			if role == "":
+				continue
+			if right:
+				if role == "u" and b_ur < 0:
+					b_ur = i
+				elif role == "f" and b_fr < 0:
+					b_fr = i
+				elif role == "h" and b_hr < 0:
+					b_hr = i
+			else:
+				if role == "u" and b_ul < 0:
+					b_ul = i
+				elif role == "f" and b_fl < 0:
+					b_fl = i
+				elif role == "h" and b_hl < 0:
+					b_hl = i
+		ok = b_ur >= 0 and b_fr >= 0 and b_hr >= 0
+
+	func _process_modification() -> void:
+		_run()
+
+	func _process_modification_with_delta(_delta: float) -> void:
+		_run()
+
+	func _run() -> void:
+		if not ok:
+			return
+		var sk := get_skeleton()
+		if sk == null:
+			return
+		_arm(sk, b_ur, b_fr, b_hr, rmode, rw, false)
+		_arm(sk, b_ul, b_fl, b_hl, lmode, lw, true)
+
+	func _arm(sk: Skeleton3D, bu: int, bf: int, bh: int, mode: int, w: float, is_left: bool) -> void:
+		if w <= 0.01 or mode == 0 or bu < 0 or bf < 0 or bh < 0:
+			return
+		var inv := sk.global_transform.basis.inverse()
+		var du := Vector3.DOWN
+		var df := Vector3.DOWN
+		if mode == 1:
+			du = aim_dir
+			df = aim_dir
+			if is_left:
+				du = (aim_dir + side * 0.18).normalized()
+				df = (aim_dir + side * 0.1).normalized()
+		elif mode == 2:
+			var sd := -0.12 if is_left else 0.12
+			du = (Vector3.DOWN + side * sd).normalized()
+			df = (Vector3.DOWN + side * sd * 0.5 + fwd * 0.12).normalized()
+		else:
+			du = (Vector3.DOWN * 0.8 + fwd * 0.5).normalized()
+			df = (Vector3.UP * 0.7 + fwd * 0.6 - side * 0.3).normalized()
+		_point(sk, bu, bf, (inv * du).normalized(), w)
+		_point(sk, bf, bh, (inv * df).normalized(), w)
+
+	func _point(sk: Skeleton3D, b: int, child: int, target: Vector3, w: float) -> void:
+		var pose: Transform3D = sk.get_bone_global_pose(b)
+		var cp: Transform3D = sk.get_bone_global_pose(child)
+		var cur := cp.origin - pose.origin
+		if cur.length() < 0.0001:
+			return
+		cur = cur.normalized()
+		var q := Quaternion(cur, target)
+		var sc := pose.basis.get_scale()
+		var ob := pose.basis.orthonormalized()
+		var nb := (Basis(q) * ob).orthonormalized()
+		var rb := ob.slerp(nb, w)
+		pose.basis = Basis(rb.x * sc.x, rb.y * sc.y, rb.z * sc.z)
+		sk.set_bone_global_pose(b, pose)
 
 
 class Ped extends CharacterBody3D:
@@ -91,6 +201,10 @@ class Ped extends CharacterBody3D:
 	var a_run := ""
 	var a_idle := ""
 	var a_cur := ""
+	var anim_ok := false
+	var ik: ArmIK
+	var prop: Node3D
+	var prop_par: Node3D
 
 
 class Cop extends CharacterBody3D:
@@ -125,6 +239,7 @@ var player: CharacterBody3D
 var player_col: CollisionShape3D
 var model: Node3D
 var char_skeleton: Skeleton3D
+var player_ik: ArmIK
 var hold_parent: Node3D
 var hand_scaled := false
 var gun_node: Node3D
@@ -137,7 +252,7 @@ var mini_panel: Panel
 var mini: Control
 var big: Control
 var wheel: Control
-var phone: Control
+var pc: Control
 
 var cam_yaw := 0.0
 var cam_pitch := 0.18
@@ -182,7 +297,7 @@ var dbg_anim_bone := ""
 var dbg_char_bone := ""
 var anim_src := {}
 var anim_cache := {}
-var bone_suffix_re := RegEx.new()
+var suffix_re := RegEx.new()
 
 var car: CharacterBody3D
 var car_visual: Node3D
@@ -196,6 +311,9 @@ var near_car := false
 var map_open := false
 var wheel_open := false
 var phone_open := false
+var phone_t := 0.0
+var phone_scale := 0.55
+var phone_raise_t := 0.0
 var bld_rects: Array[Rect2] = []
 var block_rects: Array[Rect2] = []
 var dest_set := false
@@ -266,7 +384,8 @@ var ped_glbs: Array[String] = []
 
 var sb_body: StyleBoxFlat
 var sb_screen: StyleBoxFlat
-var sb_icons: Array[StyleBoxFlat] = []
+var sb_notch: StyleBoxFlat
+var sb_apps: Array[StyleBoxFlat] = []
 var sb_pill: StyleBoxFlat
 var sb_btn: StyleBoxFlat
 var sb_map: StyleBoxFlat
@@ -274,7 +393,7 @@ var sb_map: StyleBoxFlat
 
 func _ready() -> void:
 	randomize()
-	bone_suffix_re.compile("[_.]\\d+$")
+	suffix_re.compile("[_.]\\d+$")
 	_init_assets()
 	_load_anim_sources()
 	_build_sounds()
@@ -288,7 +407,8 @@ func _ready() -> void:
 	_set_weapon(1, false)
 	for i in PED_COUNT:
 		_spawn_ped()
-	var l1 := "HAND: %s | %s" % [hand_bone_name if hand_bone_name != "" else "NOT FOUND", char_scale_dbg]
+	var ikt := "IK: YES" if (player_ik != null and player_ik.ok) else "IK: NO"
+	var l1 := "%s | HAND: %s | %s" % [ikt, hand_bone_name if hand_bone_name != "" else "NOT FOUND", char_scale_dbg]
 	var keys := ", ".join(PackedStringArray(weapon_anims.keys()))
 	if keys.length() > 60:
 		keys = keys.substr(0, 60) + "..."
@@ -365,21 +485,18 @@ func _clear_rect() -> Rect2:
 	return Rect2(_vp().x - 280.0, 140.0, 240.0, 90.0)
 
 
-func _phone_rect() -> Rect2:
+func _prect() -> Rect2:
 	var s := _vp()
-	return Rect2((s.x - 440.0) / 2.0, (s.y - 900.0) / 2.0, 440.0, 900.0)
+	var sz := Vector2(440.0, 900.0) * phone_scale
+	var k := phone_t * phone_t * (3.0 - 2.0 * phone_t)
+	var y := lerpf(s.y + 30.0, s.y - sz.y - 20.0, k)
+	return Rect2(s.x * PHONE_X_FRAC - sz.x * 0.5, y, sz.x, sz.y)
 
 
-func _phone_icon_rect(i: int) -> Rect2:
-	var r := _phone_rect()
-	var col := i % 2
-	var row := i / 2
-	return Rect2(r.position.x + 50.0 + col * 180.0, r.position.y + 190.0 + row * 210.0, 160.0, 160.0)
-
-
-func _phone_home_center() -> Vector2:
-	var r := _phone_rect()
-	return r.position + Vector2(r.size.x * 0.5, r.size.y - 55.0)
+func _icon_rect(i: int) -> Rect2:
+	var col := i % 3
+	var row := i / 3
+	return Rect2(46.0 + float(col) * 128.0, 190.0 + float(row) * 160.0, 104.0, 104.0)
 
 
 func _wheel_pos(i: int) -> Vector2:
@@ -534,19 +651,25 @@ func _init_assets() -> void:
 			ped_glbs.append(path)
 
 	sb_body = StyleBoxFlat.new()
-	sb_body.bg_color = Color(0.04, 0.04, 0.06)
+	sb_body.bg_color = Color(0.03, 0.03, 0.05)
 	sb_body.set_corner_radius_all(64)
-	sb_body.border_color = Color(0.4, 0.4, 0.45)
+	sb_body.border_color = Color(0.55, 0.55, 0.62)
 	sb_body.set_border_width_all(6)
 	sb_screen = StyleBoxFlat.new()
-	sb_screen.bg_color = Color(0.08, 0.12, 0.22)
-	sb_screen.set_corner_radius_all(44)
-	var icol := [Color(0.2, 0.7, 0.4), Color(0.25, 0.5, 0.95), Color(0.95, 0.75, 0.2), Color(0.9, 0.55, 0.15)]
+	sb_screen.bg_color = Color(0.07, 0.1, 0.22)
+	sb_screen.set_corner_radius_all(46)
+	sb_notch = StyleBoxFlat.new()
+	sb_notch.bg_color = Color(0.0, 0.0, 0.0)
+	sb_notch.set_corner_radius_all(13)
+	var icol := [
+		Color(0.2, 0.75, 0.45), Color(0.25, 0.5, 0.95), Color(0.95, 0.75, 0.2), Color(0.95, 0.55, 0.15),
+		Color(0.5, 0.5, 0.55), Color(0.5, 0.5, 0.55), Color(0.5, 0.5, 0.55), Color(0.5, 0.5, 0.55), Color(0.5, 0.5, 0.55)
+	]
 	for c in icol:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = c
-		sb.set_corner_radius_all(36)
-		sb_icons.append(sb)
+		sb.set_corner_radius_all(28)
+		sb_apps.append(sb)
 	sb_pill = StyleBoxFlat.new()
 	sb_pill.bg_color = Color(0.05, 0.06, 0.08, 0.7)
 	sb_pill.set_corner_radius_all(22)
@@ -696,17 +819,38 @@ func _set_loop(ap: AnimationPlayer, n: String) -> void:
 
 # ---------------------------------------------------------------- animations (FBX / GLB files)
 
-func _norm_bone(n: String) -> String:
+func canon(n: String) -> String:
 	var l := n.to_lower()
 	if l.contains(":"):
 		l = l.get_slice(":", l.get_slice_count(":") - 1)
-	l = l.replace("mixamorig", "")
-	l = bone_suffix_re.sub(l, "")
-	var out := ""
+	for pre in ["mixamorig", "bip001", "bip01", "def-", "def_", "cc_base_", "jnt_"]:
+		l = l.replace(pre, "")
+	l = suffix_re.sub(l, "")
+	l = suffix_re.sub(l, "")
+	var side := ""
+	if l.contains("left"):
+		side = "l"
+		l = l.replace("left", "")
+	elif l.contains("right"):
+		side = "r"
+		l = l.replace("right", "")
+	else:
+		for suf in ["_l", ".l", "-l"]:
+			if l.ends_with(suf):
+				side = "l"
+				l = l.trim_suffix(suf)
+		for suf in ["_r", ".r", "-r"]:
+			if l.ends_with(suf):
+				side = "r"
+				l = l.trim_suffix(suf)
+	var o := ""
 	for ch in l:
 		if (ch >= "a" and ch <= "z") or (ch >= "0" and ch <= "9"):
-			out += ch
-	return out
+			o += ch
+	for pair in [["upperarm", "arm"], ["lowerarm", "forearm"], ["clavicle", "shoulder"], ["pelvis", "hips"], ["thigh", "upleg"], ["upperleg", "upleg"], ["calf", "leg"], ["shin", "leg"], ["lowerleg", "leg"], ["spine01", "spine"], ["spine02", "spine1"], ["spine03", "spine2"], ["neck01", "neck"], ["toes", "toebase"], ["ball", "toebase"]]:
+		if o == pair[0]:
+			o = pair[1]
+	return side + o
 
 
 func _anim_parse(low: String) -> Array:
@@ -719,6 +863,8 @@ func _anim_parse(low: String) -> Array:
 		for tag in WEAPON_ANIM_TAGS[i]:
 			if low.contains(String(tag)):
 				widx = i
+	if low.contains("phone") or low.contains("call") or low.contains("text"):
+		widx = 9
 	var base := ""
 	if low.contains("raise") or low.contains("draw") or low.contains("equip") or low.contains("unholster"):
 		base = "raise"
@@ -734,6 +880,10 @@ func _anim_parse(low: String) -> Array:
 		base = "run"
 	elif low.contains("walk"):
 		base = "walk"
+	if base == "" and widx == 9:
+		base = "raise"
+	if base == "" and widx > 0:
+		base = "aim"
 	if base == "":
 		return []
 	return [widx, base]
@@ -800,7 +950,7 @@ func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String) -> Dictionary:
 	var bone_map := {}
 	for i in sk.get_bone_count():
 		var bn := sk.get_bone_name(i)
-		bone_map[_norm_bone(bn)] = bn
+		bone_map[canon(bn)] = bn
 		if i == 1:
 			dbg_char_bone = bn
 	var store := {}
@@ -814,13 +964,19 @@ func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String) -> Dictionary:
 				anim.remove_track(t)
 				continue
 			var raw := tp.get_subname(0)
-			var nb := _norm_bone(raw)
+			var nb := canon(raw)
 			if not bone_map.has(nb):
 				if ckey == "player":
 					dbg_anim_bone = raw
 				anim.remove_track(t)
 				continue
 			anim.track_set_path(t, NodePath(sk_path + ":" + String(bone_map[nb])))
+		var kept := anim.get_track_count()
+		if ckey == "player":
+			anim_total += tot
+			anim_kept += kept
+		if kept < 6:
+			continue
 		var base_name := String(k).get_slice("_", 1)
 		var looped := base_name in ["idle", "aim", "walk", "run"]
 		anim.loop_mode = Animation.LOOP_LINEAR if looped else Animation.LOOP_NONE
@@ -828,9 +984,6 @@ func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String) -> Dictionary:
 		lib.add_animation(aname, anim)
 		store[k] = anim
 		result[k] = aname
-		if ckey == "player":
-			anim_total += tot
-			anim_kept += anim.get_track_count()
 	anim_cache[ckey] = store
 	return result
 
@@ -848,7 +1001,7 @@ func _any(base: String) -> String:
 
 
 func _wx(w: int, base: String) -> String:
-	return _first([_wa(w, base), _any(base)])
+	return _first([_wa(w, base), _wa(0, base), _any(base)])
 
 
 func _setup_anim(p: Ped, root: Node3D, ckey: String) -> void:
@@ -880,6 +1033,33 @@ func _setup_anim(p: Ped, root: Node3D, ckey: String) -> void:
 			p.a_run = g
 	if p.a_run == "":
 		p.a_run = p.a_walk
+	p.anim_ok = p.a_idle != "" or p.a_walk != ""
+	if sk != null:
+		var ik := ArmIK.new()
+		sk.add_child(ik)
+		ik.setup(sk)
+		p.ik = ik
+		if p is Officer:
+			_give_gun(p, sk)
+
+
+func _give_gun(p: Ped, sk: Skeleton3D) -> void:
+	var hb := _find_hand_bone(sk)
+	if hb == "":
+		return
+	var att := BoneAttachment3D.new()
+	sk.add_child(att)
+	att.bone_name = hb
+	var holder := Node3D.new()
+	holder.rotation_degrees = Vector3(90, 0, 0)
+	att.add_child(holder)
+	var mi := MeshInstance3D.new()
+	mi.mesh = _boxm(Vector3(0.05, 0.12, 0.22))
+	mi.position = Vector3(0, 0, -0.1)
+	mi.material_override = _mat(Color(0.07, 0.07, 0.09))
+	holder.add_child(mi)
+	p.prop = holder
+	p.prop_par = att
 
 
 func _ped_play(p: Ped, want: String) -> void:
@@ -1441,6 +1621,10 @@ func _build_glb() -> void:
 	else:
 		_fit_by_bones(holder, char_skeleton, CHAR_HEIGHT)
 	char_scale_dbg = "SCALE %.4f" % holder.scale.x
+	if char_skeleton != null:
+		player_ik = ArmIK.new()
+		char_skeleton.add_child(player_ik)
+		player_ik.setup(char_skeleton)
 	anim_player = holder.find_child("AnimationPlayer", true, false) as AnimationPlayer
 	if anim_player == null and char_skeleton != null:
 		anim_player = AnimationPlayer.new()
@@ -1516,8 +1700,8 @@ func _attach_holdables() -> void:
 		gun_visuals.append(gv)
 
 	phone_node = Node3D.new()
-	phone_node.position = pos
-	phone_node.rotation_degrees = rot
+	phone_node.position = PHONE_HAND_POS if hand_scaled else pos
+	phone_node.rotation_degrees = PHONE_HAND_ROT if hand_scaled else rot
 	phone_node.visible = false
 	parent.add_child(phone_node)
 	var pv := _fit_glb(PHONE_GLB_PATH, PHONE_GLB_YAW, 0.15, false, false)
@@ -1538,6 +1722,82 @@ func _fix_hold_scale() -> void:
 		var inv := Vector3(1.0 / ps.x, 1.0 / ps.y, 1.0 / ps.z)
 		gun_node.scale = inv
 		phone_node.scale = inv
+
+
+func _update_player_ik(delta: float) -> void:
+	if player_ik == null or not player_ik.ok:
+		return
+	var armed := aim_t > 0.0 and cur_weapon > 0 and not in_car and not dead and not phone_open
+	var phone_hold := phone_open and not in_car and not dead
+	var yaw := model.rotation.y
+	player_ik.fwd = Vector3(-sin(yaw), 0.0, -cos(yaw))
+	player_ik.side = Vector3(cos(yaw), 0.0, -sin(yaw))
+	var tr := 0.0
+	var tl := 0.0
+	if armed:
+		var shoulder := player.position + Vector3(0, 1.4, 0)
+		var d := _aim_point(60.0) - shoulder
+		if d.length() > 1.0:
+			player_ik.aim_dir = player_ik.aim_dir.slerp(d.normalized(), 1.0 - exp(-14.0 * delta))
+		player_ik.rmode = 1
+		player_ik.lmode = 1 if cur_weapon >= 2 else 2
+		tr = 1.0
+		tl = 1.0
+	elif phone_hold:
+		var raising := phone_raise_t > 0.0 and _wa(9, "raise") != ""
+		var has_anim := _wa(9, "idle") != "" or _wa(9, "walk") != ""
+		if not raising and not has_anim:
+			player_ik.rmode = 3
+			tr = 1.0
+	elif a_idle == "" and a_walk == "" and a_run == "":
+		player_ik.rmode = 2
+		player_ik.lmode = 2
+		tr = 1.0
+		tl = 1.0
+	player_ik.rw = move_toward(player_ik.rw, tr, delta * 6.0)
+	player_ik.lw = move_toward(player_ik.lw, tl, delta * 6.0)
+
+
+func _actors(delta: float) -> void:
+	var all: Array = []
+	all.append_array(officers)
+	all.append_array(peds)
+	var ppos := player.position
+	for a in all:
+		var p := a as Ped
+		if p == null or not is_instance_valid(p) or p.ik == null or not p.ik.ok:
+			continue
+		if p.position.distance_to(ppos) > 80.0:
+			continue
+		var ik := p.ik
+		var off := p as Officer
+		var aiming := off != null and off.aiming and not off.dead
+		if p.prop != null and p.prop_par != null:
+			var ps := p.prop_par.global_transform.basis.get_scale()
+			if ps.x > 0.0001 and ps.y > 0.0001 and ps.z > 0.0001:
+				p.prop.scale = Vector3(1.0 / ps.x, 1.0 / ps.y, 1.0 / ps.z)
+			p.prop.visible = aiming
+		if p.dead:
+			ik.rw = move_toward(ik.rw, 0.0, delta * 6.0)
+			ik.lw = ik.rw
+			continue
+		var yaw := p.rotation.y
+		ik.fwd = Vector3(-sin(yaw), 0.0, -cos(yaw))
+		ik.side = Vector3(cos(yaw), 0.0, -sin(yaw))
+		var tr := 0.0
+		if aiming:
+			var tgt := car.position if in_car else player.position
+			var chest := p.position + Vector3(0, 1.4, 0)
+			ik.aim_dir = (tgt + Vector3(0, 1.1, 0) - chest).normalized()
+			ik.rmode = 1
+			ik.lmode = 1
+			tr = 1.0
+		elif not p.anim_ok:
+			ik.rmode = 2
+			ik.lmode = 2
+			tr = 1.0
+		ik.rw = move_toward(ik.rw, tr, delta * 6.0)
+		ik.lw = ik.rw
 
 
 # ---------------------------------------------------------------- vehicles
@@ -2244,6 +2504,8 @@ func _respawn() -> void:
 # ---------------------------------------------------------------- weapons
 
 func _set_weapon(i: int, show: bool = true) -> void:
+	if show and phone_open:
+		_set_phone(false)
 	cur_weapon = i
 	reloading = false
 	reload_t = 0.0
@@ -2310,7 +2572,7 @@ func _try_fire(delta: float) -> void:
 			var n := mini(need, ammo_res[cur_weapon])
 			ammo_mag[cur_weapon] += n
 			ammo_res[cur_weapon] -= n
-	if in_car or dead or map_open or wheel_open or phone_open:
+	if in_car or dead or map_open or wheel_open:
 		fire_queued = false
 		return
 
@@ -2436,6 +2698,13 @@ func _build_ui() -> void:
 	mini.draw.connect(_draw_mini)
 	mini_panel.add_child(mini)
 
+	pc = Control.new()
+	pc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pc.draw.connect(_draw_phone)
+	pc.visible = false
+	layer.add_child(pc)
+
 	big = Control.new()
 	big.set_anchors_preset(Control.PRESET_FULL_RECT)
 	big.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2450,13 +2719,6 @@ func _build_ui() -> void:
 	wheel.visible = false
 	layer.add_child(wheel)
 
-	phone = Control.new()
-	phone.set_anchors_preset(Control.PRESET_FULL_RECT)
-	phone.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	phone.draw.connect(_draw_phone)
-	phone.visible = false
-	layer.add_child(phone)
-
 	add_child(layer)
 
 
@@ -2470,8 +2732,10 @@ func _process(delta: float) -> void:
 		big.queue_redraw()
 	if wheel_open:
 		wheel.queue_redraw()
-	if phone_open:
-		phone.queue_redraw()
+	phone_t = move_toward(phone_t, 1.0 if phone_open else 0.0, delta * 3.6)
+	pc.visible = phone_t > 0.001
+	if pc.visible:
+		pc.queue_redraw()
 	if arrived_t > 0.0:
 		arrived_t -= delta
 	if toast_t > 0.0:
@@ -2557,7 +2821,7 @@ func _draw_ui() -> void:
 	if not in_car:
 		_btn(ui, _fire_center(), 90.0, fire_id != -1, "punch" if cur_weapon == 0 else "fire", "")
 		_btn(ui, _wpn_center(), 62.0, false, "guns", "")
-	_btn(ui, _phone_btn_center(), 52.0, false, "phone", "")
+	_btn(ui, _phone_btn_center(), 52.0, phone_open, "phone", "")
 
 	if in_car:
 		_draw_gauge()
@@ -2628,29 +2892,70 @@ func _draw_ui() -> void:
 		_txt(ui, "WASTED", s * 0.5, 130, Color(0.9, 0.1, 0.1))
 
 
+func _glyph(i: int, c: Vector2) -> void:
+	var w := Color(1, 1, 1, 0.95)
+	if i == 0:
+		pc.draw_circle(c + Vector2(0, -8), 18.0, w)
+		pc.draw_colored_polygon(PackedVector2Array([c + Vector2(-13, 2), c + Vector2(13, 2), c + Vector2(0, 28)]), w)
+		pc.draw_circle(c + Vector2(0, -8), 7.0, Color(0.2, 0.75, 0.45))
+	elif i == 1 or i == 3:
+		_icon(pc, "car", c, 22.0)
+	elif i == 2:
+		_icon(pc, "guns", c, 22.0)
+	elif i == 4:
+		pc.draw_rect(Rect2(c + Vector2(-26, -16), Vector2(52, 36)), w, false, 4.0)
+		pc.draw_arc(c + Vector2(0, 2), 11.0, 0.0, TAU, 24, w, 4.0, true)
+	elif i == 5:
+		pc.draw_rect(Rect2(c + Vector2(-26, -22), Vector2(52, 44)), w, false, 4.0)
+		pc.draw_colored_polygon(PackedVector2Array([c + Vector2(-22, 18), c + Vector2(-6, -2), c + Vector2(6, 10), c + Vector2(14, 2), c + Vector2(22, 18)]), w)
+	elif i == 6:
+		pc.draw_arc(c, 26.0, 0.0, TAU, 32, w, 4.0, true)
+		pc.draw_line(c, c + Vector2(0, -16), w, 4.0)
+		pc.draw_line(c, c + Vector2(12, 6), w, 4.0)
+	elif i == 7:
+		pc.draw_rect(Rect2(c + Vector2(-22, -8), Vector2(44, 32)), w, false, 4.0)
+		pc.draw_arc(c + Vector2(0, -8), 12.0, PI, TAU, 16, w, 4.0, true)
+	else:
+		pc.draw_arc(c, 17.0, 0.0, TAU, 24, w, 4.0, true)
+		for k in 8:
+			var a := float(k) * TAU / 8.0
+			pc.draw_line(c + Vector2(cos(a), sin(a)) * 19.0, c + Vector2(cos(a), sin(a)) * 27.0, w, 5.0)
+
+
 func _draw_phone() -> void:
-	var s := _vp()
-	var r := _phone_rect()
-	phone.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.55))
-	phone.draw_style_box(sb_body, r)
-	var scr := r.grow(-22.0)
-	phone.draw_style_box(sb_screen, scr)
-
+	var r := _prect()
+	var vs := _vp()
+	if r.position.y > vs.y:
+		return
+	pc.draw_set_transform(r.position, 0.0, Vector2(phone_scale, phone_scale))
+	pc.draw_style_box(sb_body, Rect2(0, 0, 440, 900))
+	pc.draw_style_box(sb_screen, Rect2(20, 20, 400, 860))
+	pc.draw_circle(Vector2(320, 270), 120.0, Color(0.35, 0.25, 0.8, 0.16))
+	pc.draw_circle(Vector2(130, 650), 140.0, Color(0.1, 0.55, 0.9, 0.12))
+	pc.draw_style_box(sb_notch, Rect2(165, 30, 110, 26))
 	var t := Time.get_time_dict_from_system()
-	phone.draw_string(ThemeDB.fallback_font, scr.position + Vector2(40, 60), "%02d:%02d" % [t["hour"], t["minute"]], HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color.WHITE)
-	phone.draw_string(ThemeDB.fallback_font, scr.position + Vector2(scr.size.x - 100, 60), "5G", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(1, 1, 1, 0.8))
-	_txt(phone, "LOS CITY", scr.position + Vector2(scr.size.x * 0.5, 130), 40, Color(1, 1, 1, 0.85))
-
-	for i in 4:
-		var ir := _phone_icon_rect(i)
-		phone.draw_style_box(sb_icons[i], ir)
-		_txt(phone, String(APP_NAMES[i]), ir.position + ir.size * 0.5, 30, Color(0.05, 0.05, 0.08))
-
-	var hc := _phone_home_center()
-	phone.draw_circle(hc, 30.0, Color(1, 1, 1, 0.25))
-	phone.draw_arc(hc, 30.0, 0.0, TAU, 32, Color(1, 1, 1, 0.8), 4.0, true)
-	if toast_t > 0.0:
-		_txt(phone, toast_msg.get_slice("\n", 0), Vector2(r.position.x + r.size.x * 0.5, r.end.y - 150.0), 28, Color(1, 0.9, 0.4))
+	pc.draw_string(ThemeDB.fallback_font, Vector2(52, 90), "%02d:%02d" % [t["hour"], t["minute"]], HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color.WHITE)
+	pc.draw_string(ThemeDB.fallback_font, Vector2(290, 90), "5G", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 1, 1, 0.8))
+	pc.draw_rect(Rect2(342, 70, 40, 20), Color(1, 1, 1, 0.9), false, 2.0)
+	pc.draw_rect(Rect2(345, 73, 28, 14), Color(0.4, 0.9, 0.5))
+	_txt(pc, "LOS CITY", Vector2(140, 135), 34, Color(1, 1, 1, 0.9))
+	for sgn in [0, 1]:
+		var cc := Vector2(330 + sgn * 50, 130)
+		pc.draw_circle(cc, 22.0, Color(1, 1, 1, 0.14))
+		pc.draw_arc(cc, 22.0, 0.0, TAU, 20, Color(1, 1, 1, 0.8), 2.0, true)
+		_txt(pc, "+" if sgn == 1 else "-", cc, 30)
+	for i in 9:
+		var ir := _icon_rect(i)
+		var soon := i >= 4
+		pc.draw_style_box(sb_apps[i], ir)
+		_glyph(i, ir.position + ir.size * 0.5 + Vector2(0, -2))
+		_txt(pc, String(APP_NAMES[i]), ir.position + Vector2(52, 124), 19, Color(1, 1, 1, 0.55 if soon else 0.95))
+		if soon:
+			pc.draw_rect(ir, Color(0, 0, 0, 0.35))
+	var hc := Vector2(220, 845)
+	pc.draw_circle(hc, 30.0, Color(1, 1, 1, 0.2))
+	pc.draw_arc(hc, 30.0, 0.0, TAU, 28, Color(1, 1, 1, 0.85), 3.0, true)
+	pc.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_wheel() -> void:
@@ -2736,13 +3041,13 @@ func _clamp_blip(p: Vector2, origin: Vector2, circle_r: float, bounds: Rect2) ->
 
 
 func _draw_map_content(c: Control, o: Vector2, wo: Vector2, sc: float, k: float, rot: float, circle_r: float, bounds: Rect2, cull: float) -> void:
-	var pc := -wo
+	var pc2 := -wo
 	for r in block_rects:
-		if cull > 0.0 and (r.get_center() - pc).length() > cull:
+		if cull > 0.0 and (r.get_center() - pc2).length() > cull:
 			continue
 		_wrect(c, r, o, wo, sc, rot, Color(0.17, 0.19, 0.23))
 	for r in bld_rects:
-		if cull > 0.0 and (r.get_center() - pc).length() > cull:
+		if cull > 0.0 and (r.get_center() - pc2).length() > cull:
 			continue
 		_wrect(c, r, o, wo, sc, rot, Color(0.31, 0.34, 0.41))
 	var lc := Color(0.6, 0.55, 0.2, 0.45)
@@ -2855,22 +3160,34 @@ func _set_wheel(open: bool) -> void:
 
 
 func _set_phone(open: bool) -> void:
+	if open == phone_open:
+		return
 	phone_open = open
-	phone.visible = open
+	a_cur = ""
 	if open:
-		_clear_touch_ids()
+		aim_t = 0.0
+		phone_raise_t = 0.0
+		var rn := _wa(9, "raise")
+		if rn != "" and anim_player != null and not in_car:
+			phone_raise_t = clampf(anim_player.get_animation(rn).length, 0.3, 2.5)
 
 
-func _phone_tap(p: Vector2) -> void:
-	if not _phone_rect().has_point(p):
+func _phone_touch(p: Vector2) -> void:
+	var r := _prect()
+	var lp := (p - r.position) / phone_scale
+	if lp.distance_to(Vector2(330, 130)) < 30.0:
+		phone_scale = maxf(0.4, phone_scale - 0.08)
+		return
+	if lp.distance_to(Vector2(380, 130)) < 30.0:
+		phone_scale = minf(1.1, phone_scale + 0.08)
+		return
+	if lp.distance_to(Vector2(220, 845)) < 40.0:
 		_set_phone(false)
 		return
-	for i in 4:
-		if _phone_icon_rect(i).has_point(p):
+	for i in 9:
+		if _icon_rect(i).has_point(lp):
 			_phone_app(i)
 			return
-	if p.distance_to(_phone_home_center()) < 70.0:
-		_set_phone(false)
 
 
 func _phone_app(i: int) -> void:
@@ -2910,6 +3227,8 @@ func _phone_app(i: int) -> void:
 		_clear_route()
 		arrived_t = 3.0
 		_set_phone(false)
+	else:
+		_toast("COMING SOON")
 
 
 func _set_dest(w: Vector2) -> void:
@@ -2993,8 +3312,8 @@ func _input(event: InputEvent) -> void:
 						break
 				_set_wheel(false)
 				return
-			if phone_open:
-				_phone_tap(p)
+			if phone_t > 0.35 and _prect().has_point(p):
+				_phone_touch(p)
 				return
 			if dead:
 				return
@@ -3002,13 +3321,15 @@ func _input(event: InputEvent) -> void:
 				_set_map(true)
 				return
 			if p.distance_to(_phone_btn_center()) < 70.0:
-				_set_phone(true)
+				_set_phone(not phone_open)
 				return
 			if (in_car or near_car) and p.distance_to(_act_center()) < 95.0:
 				_toggle_car()
 				return
 			if not in_car:
 				if p.distance_to(_fire_center()) < 115.0:
+					if phone_open:
+						_set_phone(false)
 					fire_id = event.index
 					fire_queued = true
 					return
@@ -3037,7 +3358,7 @@ func _input(event: InputEvent) -> void:
 			elif event.index == fire_id:
 				fire_id = -1
 	elif event is InputEventScreenDrag:
-		if map_open or wheel_open or phone_open:
+		if map_open or wheel_open:
 			return
 		if event.index == stick_id:
 			stick_vec = (event.position - stick_origin).limit_length(RADIUS) / RADIUS
@@ -3058,9 +3379,10 @@ func _physics_process(delta: float) -> void:
 	hurt_flash = maxf(hurt_flash - delta, 0.0)
 	fire_anim_t = maxf(fire_anim_t - delta, 0.0)
 	raise_t = maxf(raise_t - delta, 0.0)
+	phone_raise_t = maxf(phone_raise_t - delta, 0.0)
 	recoil = move_toward(recoil, 0.0, 0.6 * delta)
 
-	var armed_now := aim_t > 0.0 and cur_weapon > 0 and not in_car
+	var armed_now := aim_t > 0.0 and cur_weapon > 0 and not in_car and not phone_open
 	if armed_now and not prev_armed:
 		raise_t = 0.5
 		a_cur = ""
@@ -3084,9 +3406,11 @@ func _physics_process(delta: float) -> void:
 		_drive(delta, Vector2.ZERO, false, true)
 		_walk(delta, input)
 
+	_update_player_ik(delta)
+	_actors(delta)
 	_fix_hold_scale()
 	gun_node.visible = cur_weapon > 0 and not in_car and aim_t > 0.0 and not phone_open
-	phone_node.visible = phone_open and not in_car
+	phone_node.visible = phone_open and not in_car and phone_t > 0.3
 
 	_try_fire(delta)
 	_update_peds(delta)
@@ -3213,7 +3537,7 @@ func _update_camera(delta: float) -> void:
 	var cratio := clampf(absf(car_speed) / CAR_MAX, 0.0, 1.0)
 	var run_f := clampf(speed / MAX_SPEED, 0.0, 1.0)
 	var base := car.position if in_car else player.position
-	var aiming := aim_t > 0.0 and cur_weapon > 0 and not in_car and not dead
+	var aiming := aim_t > 0.0 and cur_weapon > 0 and not in_car and not dead and not phone_open
 	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, 4.0 * delta)
 
 	var dist := 3.6
@@ -3314,12 +3638,23 @@ func _animate(delta: float, on_floor: bool) -> void:
 
 func _animate_glb(on_floor: bool) -> void:
 	var w := cur_weapon
-	var armed := aim_t > 0.0 and w > 0
+	var holding_phone := phone_open and not in_car
+	var armed := aim_t > 0.0 and w > 0 and not phone_open
 	var run := speed > 5.5
 	var walk := speed > 0.5
 	var want := ""
 
-	if armed:
+	if holding_phone:
+		if phone_raise_t > 0.0:
+			want = _wa(9, "raise")
+		if want == "":
+			if run:
+				want = _first([_wa(9, "run"), _wa(9, "walk"), a_run, a_walk])
+			elif walk:
+				want = _first([_wa(9, "walk"), _wa(9, "run"), a_walk, a_run])
+			else:
+				want = _first([_wa(9, "idle"), a_idle])
+	elif armed:
 		if raise_t > 0.0:
 			want = _wx(w, "raise")
 		if want == "" and fire_anim_t > 0.0:
@@ -3355,9 +3690,9 @@ func _animate_glb(on_floor: bool) -> void:
 
 	if frozen:
 		anim_player.speed_scale = 0.0
-	elif a_cur != "" and (a_cur == a_walk or a_cur == _wx(w, "walk")):
+	elif a_cur != "" and (a_cur == a_walk or a_cur == _wx(w, "walk") or a_cur == _wa(9, "walk")):
 		anim_player.speed_scale = clampf(speed / 2.5, 0.6, 1.6)
-	elif a_cur != "" and (a_cur == a_run or a_cur == _wx(w, "run")):
+	elif a_cur != "" and (a_cur == a_run or a_cur == _wx(w, "run") or a_cur == _wa(9, "run")):
 		anim_player.speed_scale = clampf(speed / 7.0, 0.8, 1.4)
 	else:
 		anim_player.speed_scale = 1.0
