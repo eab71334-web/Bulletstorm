@@ -1,11 +1,12 @@
 extends Node
-# apps.gd - phone apps, money, store (batch 2)
+# apps.gd - phone home screen + apps (batch 3)
 
 const SAVE_PATH := "user://phone.cfg"
 const PHOTO_DIR := "user://photos/"
 const VIDEO_DIR := "user://videos/"
 const FONT_PATH := "res://game/font.ttf"
 const CAR_DIR := "res://game/cars/"
+const ICON_DIR := "res://game/icons/"
 const A_CAR_GLB := "res://game/car.glb"
 const A_CAR_YAW := PI
 const A_CAR_LEN := 5.4
@@ -20,11 +21,12 @@ const WALLS := [
 	[Color(0.04, 0.2, 0.12), Color(0.2, 0.55, 0.3)],
 ]
 const CARS := [
-	{"id": "sport", "name": "SPORT GT", "price": 15000, "color": Color(0.9, 0.1, 0.1)},
-	{"id": "muscle", "name": "MUSCLE V8", "price": 22000, "color": Color(0.08, 0.08, 0.1)},
-	{"id": "suv", "name": "SUV 4X4", "price": 18000, "color": Color(0.92, 0.92, 0.95)},
-	{"id": "classic", "name": "CLASSIC", "price": 9000, "color": Color(0.1, 0.3, 0.8)},
-	{"id": "taxi", "name": "TAXI", "price": 6000, "color": Color(0.95, 0.8, 0.1)},
+	{"id": "starter", "name": "STARTER", "price": 0, "color": Color(0.8, 0.08, 0.08), "spd": 0.6, "acc": 0.6, "hnd": 0.6},
+	{"id": "sport", "name": "SPORT GT", "price": 15000, "color": Color(0.9, 0.1, 0.1), "spd": 0.9, "acc": 0.85, "hnd": 0.8},
+	{"id": "muscle", "name": "MUSCLE V8", "price": 22000, "color": Color(0.1, 0.1, 0.14), "spd": 0.8, "acc": 0.9, "hnd": 0.55},
+	{"id": "suv", "name": "SUV 4X4", "price": 18000, "color": Color(0.85, 0.86, 0.9), "spd": 0.6, "acc": 0.6, "hnd": 0.7},
+	{"id": "classic", "name": "CLASSIC", "price": 9000, "color": Color(0.1, 0.3, 0.8), "spd": 0.55, "acc": 0.5, "hnd": 0.6},
+	{"id": "taxi", "name": "TAXI", "price": 6000, "color": Color(0.95, 0.8, 0.1), "spd": 0.5, "acc": 0.6, "hnd": 0.65},
 ]
 const AMMO := [
 	{"w": 1, "name": "PISTOL AMMO", "price": 120, "n": 24},
@@ -33,13 +35,38 @@ const AMMO := [
 	{"w": 4, "name": "RIFLE AMMO", "price": 450, "n": 60},
 ]
 const SOON_APPS := ["Chirp (social)", "Snapgram (social)", "Mini Racer (game)", "Sky Jump (game)", "Tower Chess (game)"]
+const HOME_GRID := [
+	{"app": 0, "key": "map", "glyph": "pin", "c1": Color(0.3, 0.85, 0.5), "c2": Color(0.08, 0.5, 0.3)},
+	{"app": 1, "key": "mycar", "glyph": "car", "c1": Color(0.4, 0.62, 1.0), "c2": Color(0.15, 0.3, 0.85)},
+	{"app": 2, "key": "guns", "glyph": "gun", "c1": Color(1.0, 0.8, 0.3), "c2": Color(0.9, 0.5, 0.1)},
+	{"app": 3, "key": "taxi", "glyph": "taxi", "c1": Color(1.0, 0.7, 0.3), "c2": Color(0.9, 0.35, 0.15)},
+	{"app": 6, "key": "clk", "glyph": "clock", "c1": Color(0.5, 0.52, 0.6), "c2": Color(0.12, 0.13, 0.18)},
+	{"app": 7, "key": "store", "glyph": "bag", "c1": Color(0.7, 0.5, 1.0), "c2": Color(0.4, 0.2, 0.85)},
+	{"app": 10, "key": "chirp", "glyph": "chat", "c1": Color(0.4, 0.8, 1.0), "c2": Color(0.1, 0.5, 0.9)},
+	{"app": 11, "key": "racer", "glyph": "game", "c1": Color(1.0, 0.45, 0.45), "c2": Color(0.8, 0.15, 0.25)},
+]
+const HOME_DOCK := [
+	{"app": 9, "key": "phone", "glyph": "phone", "c1": Color(0.45, 0.9, 0.35), "c2": Color(0.1, 0.6, 0.2)},
+	{"app": 4, "key": "camera", "glyph": "camera", "c1": Color(0.88, 0.9, 0.95), "c2": Color(0.45, 0.47, 0.55)},
+	{"app": 5, "key": "photos", "glyph": "photo", "c1": Color(1.0, 0.55, 0.7), "c2": Color(0.85, 0.25, 0.45)},
+	{"app": 8, "key": "settings", "glyph": "gear", "c1": Color(0.78, 0.8, 0.85), "c2": Color(0.35, 0.37, 0.45)},
+]
+const CONTACTS := [
+	{"name": "police", "num": "100", "kind": "police", "col": Color(0.2, 0.4, 0.95)},
+	{"name": "ambulance", "num": "101", "kind": "ambulance", "col": Color(0.9, 0.2, 0.25)},
+	{"name": "fire", "num": "102", "kind": "fire", "col": Color(0.95, 0.5, 0.15)},
+	{"name": "taxi", "num": "103", "kind": "taxi", "col": Color(0.9, 0.75, 0.15)},
+	{"name": "mechanic", "num": "104", "kind": "mechanic", "col": Color(0.5, 0.55, 0.62)},
+	{"name": "boss", "num": "555-0101", "kind": "none", "col": Color(0.55, 0.4, 0.9)},
+	{"name": "sara", "num": "555-0102", "kind": "none", "col": Color(0.9, 0.4, 0.6)},
+]
 
 const TXT := {
-	"en": {"camera": "Camera", "photos": "Photos", "clock": "Clock", "store": "Store", "settings": "Settings", "photo": "PHOTO", "video": "VIDEO", "slow": "SLOW", "normal": "NORMAL", "fast": "FAST", "save": "SAVE", "delete": "DELETE", "wallpaper": "Wallpaper", "language": "Language", "buy": "BUY", "owned": "OWNED", "select": "SELECT", "selected": "SELECTED", "cars": "CARS", "ammo": "AMMO", "air": "AIR", "apps": "APPS", "alarm": "Alarm", "stopwatch": "Stopwatch", "timer": "Timer", "clk": "Clock", "start": "START", "stop": "STOP", "lap": "LAP", "reset": "RESET", "add": "+ ALARM", "ring": "ALARM!", "edit": "EDIT", "bright": "Brightness", "contrast": "Contrast", "satur": "Saturation", "bw": "B&W", "sepia": "Sepia", "warm": "Warm", "cool": "Cool", "vivid": "Vivid", "rotate": "ROTATE", "flip": "FLIP", "size": "SIZE", "undo": "UNDO", "saved": "Saved", "empty": "Nothing here yet", "nomoney": "Not enough money", "bought": "Purchased", "setwp": "WALLPAPER", "soon": "SOON", "shadows": "Shadows", "fps": "Show FPS", "volume": "Volume", "on": "ON", "off": "OFF", "gallery": "Gallery", "pickwp": "Pick a wallpaper", "flysoon": "Flying: next update", "dismiss": "DISMISS", "back": "Back", "photocam": "BACK CAM", "selfie": "FRONT CAM"},
-	"ar": {"camera": "الكاميرا", "photos": "الصور", "clock": "الساعة", "store": "المتجر", "settings": "الإعدادات", "photo": "صورة", "video": "فيديو", "slow": "بطيء", "normal": "عادي", "fast": "سريع", "save": "حفظ", "delete": "حذف", "wallpaper": "الخلفية", "language": "اللغة", "buy": "شراء", "owned": "مملوك", "select": "اختيار", "selected": "مختار", "cars": "سيارات", "ammo": "ذخيرة", "air": "جوي", "apps": "تطبيقات", "alarm": "منبه", "stopwatch": "ايقاف", "timer": "مؤقت", "clk": "ساعة", "start": "ابدأ", "stop": "ايقاف", "lap": "دورة", "reset": "تصفير", "add": "+ منبه", "ring": "المنبه!", "edit": "تعديل", "bright": "السطوع", "contrast": "التباين", "satur": "التشبع", "bw": "أبيض وأسود", "sepia": "بني", "warm": "دافئ", "cool": "بارد", "vivid": "زاهي", "rotate": "تدوير", "flip": "قلب", "size": "الحجم", "undo": "تراجع", "saved": "تم الحفظ", "empty": "لا يوجد شيء بعد", "nomoney": "رصيد غير كاف", "bought": "تم الشراء", "setwp": "خلفية", "soon": "قريبا", "shadows": "الظلال", "fps": "عرض الإطارات", "volume": "الصوت", "on": "تشغيل", "off": "ايقاف", "gallery": "المعرض", "pickwp": "اختر خلفية", "flysoon": "الطيران: التحديث القادم", "dismiss": "ايقاف", "back": "رجوع", "photocam": "خلفية", "selfie": "أمامية"},
-	"fr": {"camera": "Appareil photo", "photos": "Photos", "clock": "Horloge", "store": "Boutique", "settings": "Réglages", "photo": "PHOTO", "video": "VIDÉO", "slow": "LENT", "normal": "NORMAL", "fast": "RAPIDE", "save": "ENREGISTRER", "delete": "SUPPRIMER", "wallpaper": "Fond d'écran", "language": "Langue", "buy": "ACHETER", "owned": "POSSÉDÉ", "select": "CHOISIR", "selected": "CHOISI", "cars": "VOITURES", "ammo": "MUNITIONS", "air": "AIR", "apps": "APPS", "alarm": "Alarme", "stopwatch": "Chrono", "timer": "Minuteur", "clk": "Horloge", "start": "DÉMARRER", "stop": "STOP", "lap": "TOUR", "reset": "RAZ", "add": "+ ALARME", "ring": "ALARME !", "edit": "MODIFIER", "bright": "Luminosité", "contrast": "Contraste", "satur": "Saturation", "bw": "N&B", "sepia": "Sépia", "warm": "Chaud", "cool": "Froid", "vivid": "Vif", "rotate": "PIVOTER", "flip": "MIROIR", "size": "TAILLE", "undo": "ANNULER", "saved": "Enregistré", "empty": "Rien ici", "nomoney": "Fonds insuffisants", "bought": "Acheté", "setwp": "FOND", "soon": "BIENTÔT", "shadows": "Ombres", "fps": "Afficher FPS", "volume": "Volume", "on": "OUI", "off": "NON", "gallery": "Galerie", "pickwp": "Choisir un fond", "flysoon": "Vol : prochaine mise à jour", "dismiss": "ARRÊTER", "back": "Retour", "photocam": "ARRIÈRE", "selfie": "AVANT"},
-	"es": {"camera": "Cámara", "photos": "Fotos", "clock": "Reloj", "store": "Tienda", "settings": "Ajustes", "photo": "FOTO", "video": "VÍDEO", "slow": "LENTO", "normal": "NORMAL", "fast": "RÁPIDO", "save": "GUARDAR", "delete": "BORRAR", "wallpaper": "Fondo", "language": "Idioma", "buy": "COMPRAR", "owned": "TUYO", "selected": "ELEGIDO", "select": "ELEGIR", "cars": "COCHES", "ammo": "MUNICIÓN", "air": "AIRE", "apps": "APPS", "alarm": "Alarma", "stopwatch": "Cronómetro", "timer": "Temporizador", "clk": "Reloj", "start": "INICIAR", "stop": "PARAR", "lap": "VUELTA", "reset": "REINICIAR", "add": "+ ALARMA", "ring": "¡ALARMA!", "edit": "EDITAR", "bright": "Brillo", "contrast": "Contraste", "satur": "Saturación", "bw": "B/N", "sepia": "Sepia", "warm": "Cálido", "cool": "Frío", "vivid": "Vívido", "rotate": "GIRAR", "flip": "VOLTEAR", "size": "TAMAÑO", "undo": "DESHACER", "saved": "Guardado", "empty": "Nada aún", "nomoney": "Dinero insuficiente", "bought": "Comprado", "setwp": "FONDO", "soon": "PRONTO", "shadows": "Sombras", "fps": "Mostrar FPS", "volume": "Volumen", "on": "SÍ", "off": "NO", "gallery": "Galería", "pickwp": "Elige un fondo", "flysoon": "Vuelo: próxima actualización", "dismiss": "DETENER", "back": "Atrás", "photocam": "TRASERA", "selfie": "FRONTAL"},
-	"tr": {"camera": "Kamera", "photos": "Fotoğraflar", "clock": "Saat", "store": "Mağaza", "settings": "Ayarlar", "photo": "FOTO", "video": "VİDEO", "slow": "YAVAŞ", "normal": "NORMAL", "fast": "HIZLI", "save": "KAYDET", "delete": "SİL", "wallpaper": "Duvar kâğıdı", "language": "Dil", "buy": "SATIN AL", "owned": "SAHİP", "select": "SEÇ", "selected": "SEÇİLİ", "cars": "ARABALAR", "ammo": "MERMİ", "air": "HAVA", "apps": "UYGULAMA", "alarm": "Alarm", "stopwatch": "Kronometre", "timer": "Zamanlayıcı", "clk": "Saat", "start": "BAŞLAT", "stop": "DURDUR", "lap": "TUR", "reset": "SIFIRLA", "add": "+ ALARM", "ring": "ALARM!", "edit": "DÜZENLE", "bright": "Parlaklık", "contrast": "Kontrast", "satur": "Doygunluk", "bw": "S/B", "sepia": "Sepya", "warm": "Sıcak", "cool": "Soğuk", "vivid": "Canlı", "rotate": "DÖNDÜR", "flip": "ÇEVİR", "size": "BOYUT", "undo": "GERİ AL", "saved": "Kaydedildi", "empty": "Henüz yok", "nomoney": "Yetersiz bakiye", "bought": "Satın alındı", "setwp": "DUVAR", "soon": "YAKINDA", "shadows": "Gölgeler", "fps": "FPS göster", "volume": "Ses", "on": "AÇIK", "off": "KAPALI", "gallery": "Galeri", "pickwp": "Duvar kâğıdı seç", "flysoon": "Uçuş: sonraki güncelleme", "dismiss": "KAPAT", "back": "Geri", "photocam": "ARKA", "selfie": "ÖN"},
+	"en": {"camera": "Camera", "photos": "Photos", "clock": "Clock", "store": "Store", "settings": "Settings", "photo": "PHOTO", "video": "VIDEO", "slow": "SLOW", "normal": "NORMAL", "fast": "FAST", "save": "SAVE", "delete": "DELETE", "wallpaper": "Wallpaper", "language": "Language", "buy": "BUY", "owned": "OWNED", "select": "SELECT", "selected": "SELECTED", "cars": "CARS", "ammo": "AMMO", "air": "AIR", "apps": "APPS", "alarm": "Alarm", "stopwatch": "Stopwatch", "timer": "Timer", "clk": "Clock", "start": "START", "stop": "STOP", "lap": "LAP", "reset": "RESET", "add": "+ ALARM", "ring": "ALARM!", "edit": "EDIT", "bright": "Brightness", "contrast": "Contrast", "satur": "Saturation", "bw": "B&W", "sepia": "Sepia", "warm": "Warm", "cool": "Cool", "vivid": "Vivid", "rotate": "ROTATE", "flip": "FLIP", "size": "SIZE", "undo": "UNDO", "saved": "Saved", "empty": "Nothing here yet", "nomoney": "Not enough money", "bought": "Purchased", "setwp": "WALLPAPER", "soon": "SOON", "shadows": "Shadows", "fps": "Show FPS", "volume": "Volume", "on": "ON", "off": "OFF", "gallery": "Gallery", "pickwp": "Pick a wallpaper", "flysoon": "Flying: next update", "dismiss": "DISMISS", "back": "Back", "photocam": "BACK CAM", "selfie": "FRONT CAM", "map": "Maps", "mycar": "My Car", "guns": "Weapons", "taxi": "Taxi", "chirp": "Chirp", "racer": "Racer", "phone": "Phone", "keypad": "Keypad", "recents": "Recents", "contacts": "Contacts", "calling": "Calling...", "connected": "Connected", "end": "END", "police": "Police", "ambulance": "Ambulance", "fire": "Fire Dept", "mechanic": "Mechanic", "boss": "Boss", "sara": "Sara", "noanswer": "No answer", "wrong": "Wrong number", "dispatched": "Police dispatched", "healed": "Paramedics treated you", "fdispatched": "Fire dept notified", "onway": "On the way", "phonesize": "Phone size"},
+	"ar": {"camera": "الكاميرا", "photos": "الصور", "clock": "الساعة", "store": "المتجر", "settings": "الإعدادات", "photo": "صورة", "video": "فيديو", "slow": "بطيء", "normal": "عادي", "fast": "سريع", "save": "حفظ", "delete": "حذف", "wallpaper": "الخلفية", "language": "اللغة", "buy": "شراء", "owned": "مملوك", "select": "اختيار", "selected": "مختار", "cars": "سيارات", "ammo": "ذخيرة", "air": "جوي", "apps": "تطبيقات", "alarm": "منبه", "stopwatch": "ايقاف", "timer": "مؤقت", "clk": "ساعة", "start": "ابدأ", "stop": "ايقاف", "lap": "دورة", "reset": "تصفير", "add": "+ منبه", "ring": "المنبه!", "edit": "تعديل", "bright": "السطوع", "contrast": "التباين", "satur": "التشبع", "bw": "أبيض وأسود", "sepia": "بني", "warm": "دافئ", "cool": "بارد", "vivid": "زاهي", "rotate": "تدوير", "flip": "قلب", "size": "الحجم", "undo": "تراجع", "saved": "تم الحفظ", "empty": "لا يوجد شيء بعد", "nomoney": "رصيد غير كاف", "bought": "تم الشراء", "setwp": "خلفية", "soon": "قريبا", "shadows": "الظلال", "fps": "عرض الإطارات", "volume": "الصوت", "on": "تشغيل", "off": "ايقاف", "gallery": "المعرض", "pickwp": "اختر خلفية", "flysoon": "الطيران: التحديث القادم", "dismiss": "ايقاف", "back": "رجوع", "photocam": "خلفية", "selfie": "أمامية", "map": "الخريطة", "mycar": "سيارتي", "guns": "الأسلحة", "taxi": "تاكسي", "chirp": "تغريد", "racer": "سباق", "phone": "الهاتف", "keypad": "الأرقام", "recents": "الأخيرة", "contacts": "الأسماء", "calling": "جاري الاتصال...", "connected": "تم الاتصال", "end": "إنهاء", "police": "الشرطة", "ambulance": "الإسعاف", "fire": "المطافئ", "mechanic": "ميكانيكي", "boss": "المدير", "sara": "سارة", "noanswer": "لا يوجد رد", "wrong": "رقم خاطئ", "dispatched": "تم إرسال الشرطة", "healed": "عالجك المسعفون", "fdispatched": "تم إبلاغ المطافئ", "onway": "في الطريق", "phonesize": "حجم الهاتف"},
+	"fr": {"camera": "Appareil photo", "photos": "Photos", "clock": "Horloge", "store": "Boutique", "settings": "Réglages", "photo": "PHOTO", "video": "VIDÉO", "slow": "LENT", "normal": "NORMAL", "fast": "RAPIDE", "save": "ENREGISTRER", "delete": "SUPPRIMER", "wallpaper": "Fond d'écran", "language": "Langue", "buy": "ACHETER", "owned": "POSSÉDÉ", "select": "CHOISIR", "selected": "CHOISI", "cars": "VOITURES", "ammo": "MUNITIONS", "air": "AIR", "apps": "APPS", "alarm": "Alarme", "stopwatch": "Chrono", "timer": "Minuteur", "clk": "Horloge", "start": "DÉMARRER", "stop": "STOP", "lap": "TOUR", "reset": "RAZ", "add": "+ ALARME", "ring": "ALARME !", "edit": "MODIFIER", "bright": "Luminosité", "contrast": "Contraste", "satur": "Saturation", "bw": "N&B", "sepia": "Sépia", "warm": "Chaud", "cool": "Froid", "vivid": "Vif", "rotate": "PIVOTER", "flip": "MIROIR", "size": "TAILLE", "undo": "ANNULER", "saved": "Enregistré", "empty": "Rien ici", "nomoney": "Fonds insuffisants", "bought": "Acheté", "setwp": "FOND", "soon": "BIENTÔT", "shadows": "Ombres", "fps": "Afficher FPS", "volume": "Volume", "on": "OUI", "off": "NON", "gallery": "Galerie", "pickwp": "Choisir un fond", "flysoon": "Vol : prochaine mise à jour", "dismiss": "ARRÊTER", "back": "Retour", "photocam": "ARRIÈRE", "selfie": "AVANT", "map": "Plans", "mycar": "Ma voiture", "guns": "Armes", "taxi": "Taxi", "chirp": "Chirp", "racer": "Course", "phone": "Téléphone", "keypad": "Clavier", "recents": "Récents", "contacts": "Contacts", "calling": "Appel...", "connected": "Connecté", "end": "FIN", "police": "Police", "ambulance": "Ambulance", "fire": "Pompiers", "mechanic": "Mécanicien", "boss": "Patron", "sara": "Sara", "noanswer": "Pas de réponse", "wrong": "Mauvais numéro", "dispatched": "Police envoyée", "healed": "Soigné par les secours", "fdispatched": "Pompiers prévenus", "onway": "En route", "phonesize": "Taille"},
+	"es": {"camera": "Cámara", "photos": "Fotos", "clock": "Reloj", "store": "Tienda", "settings": "Ajustes", "photo": "FOTO", "video": "VÍDEO", "slow": "LENTO", "normal": "NORMAL", "fast": "RÁPIDO", "save": "GUARDAR", "delete": "BORRAR", "wallpaper": "Fondo", "language": "Idioma", "buy": "COMPRAR", "owned": "TUYO", "select": "ELEGIR", "selected": "ELEGIDO", "cars": "COCHES", "ammo": "MUNICIÓN", "air": "AIRE", "apps": "APPS", "alarm": "Alarma", "stopwatch": "Cronómetro", "timer": "Temporizador", "clk": "Reloj", "start": "INICIAR", "stop": "PARAR", "lap": "VUELTA", "reset": "REINICIAR", "add": "+ ALARMA", "ring": "¡ALARMA!", "edit": "EDITAR", "bright": "Brillo", "contrast": "Contraste", "satur": "Saturación", "bw": "B/N", "sepia": "Sepia", "warm": "Cálido", "cool": "Frío", "vivid": "Vívido", "rotate": "GIRAR", "flip": "VOLTEAR", "size": "TAMAÑO", "undo": "DESHACER", "saved": "Guardado", "empty": "Nada aún", "nomoney": "Dinero insuficiente", "bought": "Comprado", "setwp": "FONDO", "soon": "PRONTO", "shadows": "Sombras", "fps": "Mostrar FPS", "volume": "Volumen", "on": "SÍ", "off": "NO", "gallery": "Galería", "pickwp": "Elige un fondo", "flysoon": "Vuelo: próxima actualización", "dismiss": "DETENER", "back": "Atrás", "photocam": "TRASERA", "selfie": "FRONTAL", "map": "Mapas", "mycar": "Mi coche", "guns": "Armas", "taxi": "Taxi", "chirp": "Chirp", "racer": "Carreras", "phone": "Teléfono", "keypad": "Teclado", "recents": "Recientes", "contacts": "Contactos", "calling": "Llamando...", "connected": "Conectado", "end": "FIN", "police": "Policía", "ambulance": "Ambulancia", "fire": "Bomberos", "mechanic": "Mecánico", "boss": "Jefe", "sara": "Sara", "noanswer": "Sin respuesta", "wrong": "Número erróneo", "dispatched": "Policía enviada", "healed": "Te atendieron", "fdispatched": "Bomberos avisados", "onway": "En camino", "phonesize": "Tamaño"},
+	"tr": {"camera": "Kamera", "photos": "Fotoğraflar", "clock": "Saat", "store": "Mağaza", "settings": "Ayarlar", "photo": "FOTO", "video": "VİDEO", "slow": "YAVAŞ", "normal": "NORMAL", "fast": "HIZLI", "save": "KAYDET", "delete": "SİL", "wallpaper": "Duvar kâğıdı", "language": "Dil", "buy": "SATIN AL", "owned": "SAHİP", "select": "SEÇ", "selected": "SEÇİLİ", "cars": "ARABALAR", "ammo": "MERMİ", "air": "HAVA", "apps": "UYGULAMA", "alarm": "Alarm", "stopwatch": "Kronometre", "timer": "Zamanlayıcı", "clk": "Saat", "start": "BAŞLAT", "stop": "DURDUR", "lap": "TUR", "reset": "SIFIRLA", "add": "+ ALARM", "ring": "ALARM!", "edit": "DÜZENLE", "bright": "Parlaklık", "contrast": "Kontrast", "satur": "Doygunluk", "bw": "S/B", "sepia": "Sepya", "warm": "Sıcak", "cool": "Soğuk", "vivid": "Canlı", "rotate": "DÖNDÜR", "flip": "ÇEVİR", "size": "BOYUT", "undo": "GERİ AL", "saved": "Kaydedildi", "empty": "Henüz yok", "nomoney": "Yetersiz bakiye", "bought": "Satın alındı", "setwp": "DUVAR", "soon": "YAKINDA", "shadows": "Gölgeler", "fps": "FPS göster", "volume": "Ses", "on": "AÇIK", "off": "KAPALI", "gallery": "Galeri", "pickwp": "Duvar kâğıdı seç", "flysoon": "Uçuş: sonraki güncelleme", "dismiss": "KAPAT", "back": "Geri", "photocam": "ARKA", "selfie": "ÖN", "map": "Harita", "mycar": "Arabam", "guns": "Silahlar", "taxi": "Taksi", "chirp": "Chirp", "racer": "Yarış", "phone": "Telefon", "keypad": "Tuş takımı", "recents": "Son", "contacts": "Kişiler", "calling": "Aranıyor...", "connected": "Bağlandı", "end": "BİTİR", "police": "Polis", "ambulance": "Ambulans", "fire": "İtfaiye", "mechanic": "Tamirci", "boss": "Patron", "sara": "Sara", "noanswer": "Cevap yok", "wrong": "Yanlış numara", "dispatched": "Polis gönderildi", "healed": "Sağlık ekibi tedavi etti", "fdispatched": "İtfaiye haberdar", "onway": "Yolda", "phonesize": "Boyut"},
 }
 
 var g
@@ -50,6 +77,7 @@ var sbs: Array = []
 var font: Font
 var sys_font: SystemFont
 var custom_font := false
+var icon_tex := {}
 var lang := "en"
 var money := START_MONEY
 var gain_t := 0.0
@@ -81,6 +109,19 @@ var show_fps := false
 var sun: DirectionalLight3D
 var save_t := 0.0
 var dirty := false
+
+var phone_tab := 0
+var dial := ""
+var recents: Array = []
+var call_state := ""
+var call_name := ""
+var call_num := ""
+var call_kind := ""
+var call_col := Color.WHITE
+var call_t := 0.0
+var call_msg := ""
+var call_player: AudioStreamPlayer
+var heal_t := 0.0
 
 var sv: SubViewport
 var pcam: Camera3D
@@ -125,6 +166,10 @@ func _ready() -> void:
 	ring_player = AudioStreamPlayer.new()
 	ring_player.stream = _beep_stream()
 	add_child(ring_player)
+	call_player = AudioStreamPlayer.new()
+	call_player.stream = _ringback_stream()
+	call_player.volume_db = -6.0
+	add_child(call_player)
 	shutter_player = AudioStreamPlayer.new()
 	shutter_player.stream = g._synth_click(1)
 	add_child(shutter_player)
@@ -137,6 +182,7 @@ func _ready() -> void:
 	pcam.far = 500.0
 	sv.add_child(pcam)
 	pcam.current = true
+	_set_player_layers(g.model)
 	for n in g.get_children():
 		if n is DirectionalLight3D:
 			sun = n
@@ -189,11 +235,12 @@ func _mk(bg: Color, border: Color, rad: int, bw: int) -> StyleBoxFlat:
 func _make_styles() -> void:
 	sbs = [
 		_mk(Color(1, 1, 1, 0.12), Color(1, 1, 1, 0.55), 14, 2),
-		_mk(Color(0.25, 0.5, 0.95, 0.85), Color(1, 1, 1, 0.8), 14, 2),
-		_mk(Color(0.2, 0.7, 0.4, 0.9), Color(1, 1, 1, 0.8), 14, 2),
-		_mk(Color(0.85, 0.2, 0.2, 0.9), Color(1, 1, 1, 0.8), 14, 2),
+		_mk(Color(0.25, 0.5, 0.95, 0.9), Color(1, 1, 1, 0.8), 14, 2),
+		_mk(Color(0.2, 0.7, 0.4, 0.92), Color(1, 1, 1, 0.8), 14, 2),
+		_mk(Color(0.85, 0.2, 0.2, 0.92), Color(1, 1, 1, 0.8), 14, 2),
 		_mk(Color(0.03, 0.04, 0.08, 0.72), Color(1, 1, 1, 0.18), 18, 2),
 		_mk(Color(0.3, 0.3, 0.34, 0.8), Color(1, 1, 1, 0.2), 14, 2),
+		_mk(Color(1, 1, 1, 0.14), Color(1, 1, 1, 0.28), 30, 2),
 	]
 
 
@@ -222,6 +269,10 @@ func _plain(c: Control, r: Rect2, label: String, kind: int = 5, size: int = 20) 
 func _title(c: Control, key: String) -> void:
 	_t(c, T(key), Vector2(220, 128), 30)
 	c.draw_line(Vector2(40, 158), Vector2(400, 158), Color(1, 1, 1, 0.25), 2.0)
+
+
+func _grad(c: Control, r: Rect2, top: Color, bot: Color) -> void:
+	c.draw_polygon(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), PackedColorArray([top, top, bot, bot]))
 
 
 func _fmt(n: int) -> String:
@@ -260,6 +311,25 @@ func _beep_stream() -> AudioStreamWAV:
 	return g._wav(s, rate, true)
 
 
+func _ringback_stream() -> AudioStreamWAV:
+	var rate := 22050
+	var n := rate * 3
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for i in n:
+		var t := float(i) / float(rate)
+		var on := t < 1.0
+		s[i] = ((sin(TAU * 440.0 * t) + sin(TAU * 480.0 * t)) * 0.18) if on else 0.0
+	return g._wav(s, rate, true)
+
+
+func _set_player_layers(n: Node) -> void:
+	if n is VisualInstance3D:
+		(n as VisualInstance3D).layers = 1 << 19
+	for ch in n.get_children():
+		_set_player_layers(ch)
+
+
 # ---------------------------------------------------------------- save / load
 
 func _save() -> void:
@@ -274,6 +344,7 @@ func _save() -> void:
 	cf.set_value("p", "volume", volume)
 	cf.set_value("p", "shadows", shadows)
 	cf.set_value("p", "fps", show_fps)
+	cf.set_value("p", "recents", recents)
 	cf.save(SAVE_PATH)
 	dirty = false
 
@@ -292,6 +363,7 @@ func _load() -> void:
 	volume = float(cf.get_value("p", "volume", 1.0))
 	shadows = bool(cf.get_value("p", "shadows", true))
 	show_fps = bool(cf.get_value("p", "fps", false))
+	recents = cf.get_value("p", "recents", [])
 
 
 func _apply_options() -> void:
@@ -318,9 +390,9 @@ func _apply_car(id: String) -> void:
 	var col := Color(0.8, 0.08, 0.08)
 	if id != "starter":
 		path = CAR_DIR + id + ".glb"
-		for c in CARS:
-			if c["id"] == id:
-				col = c["color"]
+		for cc in CARS:
+			if cc["id"] == id:
+				col = cc["color"]
 	var holder = g._fit_glb(path, A_CAR_YAW, A_CAR_LEN, false, true)
 	if holder != null:
 		vis.add_child(holder)
@@ -350,6 +422,19 @@ func _process(delta: float) -> void:
 		ringing -= delta
 		if ringing <= 0.0:
 			_stop_ring()
+	if call_state == "ringing":
+		call_t += delta
+		if call_t >= 2.4:
+			_connect_call()
+	elif call_state == "connected":
+		call_t += delta
+		if call_t >= 5.0:
+			_end_call()
+	if heal_t > 0.0:
+		heal_t -= delta
+		if heal_t <= 0.0:
+			g.hp = 100.0
+			g._toast(T("healed"), 3.0)
 	if app == 4:
 		_update_cam_rig()
 		if flash_t > 0.0:
@@ -408,6 +493,8 @@ func open_app(i: int) -> void:
 	elif i == 7:
 		store_tab = 0
 		store_page = 0
+	elif i == 9:
+		phone_tab = 0
 
 
 func close_app() -> void:
@@ -425,12 +512,13 @@ func _back() -> void:
 	if ringing > 0.0:
 		_stop_ring()
 		return
+	if call_state != "":
+		_end_call()
+		return
 	if page == "edit":
 		page = "view"
 	elif page != "":
 		page = ""
-		if pick_mode and app == 5:
-			pick_mode = false
 	elif pick_mode:
 		pick_mode = false
 		app = 8
@@ -442,7 +530,10 @@ func _back() -> void:
 
 func touch(lp: Vector2) -> void:
 	if lp.distance_to(Vector2(220, 845)) < 42.0:
-		_back()
+		if app == -1:
+			g._set_phone(false)
+		else:
+			_back()
 		return
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
@@ -451,8 +542,21 @@ func touch(lp: Vector2) -> void:
 			return
 
 
+func _open_home(i: int) -> void:
+	if i >= 10:
+		g._toast(T("soon"), 1.5)
+	elif i <= 3:
+		g._phone_app(i)
+	else:
+		open_app(i)
+
+
 func _act(a: String, v) -> void:
 	match a:
+		"open":
+			_open_home(int(v))
+		"zoom":
+			g.phone_scale = clampf(float(g.phone_scale) + float(v), 0.5, 1.05)
 		"cam_mode":
 			if recording:
 				_stop_rec()
@@ -608,6 +712,25 @@ func _act(a: String, v) -> void:
 			dirty = true
 		"dismiss":
 			_stop_ring()
+		"ph_tab":
+			phone_tab = int(v)
+		"dial":
+			if dial.length() < 12:
+				dial += String(v)
+		"dial_del":
+			dial = dial.substr(0, maxi(dial.length() - 1, 0))
+		"dial_call":
+			if dial != "":
+				_call_number(dial)
+				dial = ""
+		"call_contact":
+			var ct: Dictionary = CONTACTS[int(v)]
+			_start_call(String(ct["name"]), String(ct["num"]), String(ct["kind"]), ct["col"])
+		"redial":
+			var r: Dictionary = recents[int(v)]
+			_start_call(String(r["n"]), String(r["num"]), String(r["k"]), r["c"])
+		"end_call":
+			_end_call()
 
 
 func _pay(price: int) -> bool:
@@ -627,10 +750,172 @@ func _buy(id: String, price: int) -> void:
 
 
 func _car_price(id: String) -> int:
-	for c in CARS:
-		if c["id"] == id:
-			return int(c["price"])
+	for cc in CARS:
+		if cc["id"] == id:
+			return int(cc["price"])
 	return 0
+
+
+# ---------------------------------------------------------------- phone app (calls, contacts)
+
+func _call_number(num: String) -> void:
+	for ct in CONTACTS:
+		if String(ct["num"]) == num:
+			_start_call(String(ct["name"]), num, String(ct["kind"]), ct["col"])
+			return
+	_start_call(num, num, "wrong", Color(0.5, 0.5, 0.58))
+
+
+func _start_call(key: String, num: String, kind: String, col: Color) -> void:
+	call_state = "ringing"
+	call_name = key
+	call_num = num
+	call_kind = kind
+	call_col = col
+	call_t = 0.0
+	call_msg = ""
+	call_player.play()
+	var t := Time.get_time_dict_from_system()
+	recents.push_front({"n": key, "num": num, "k": kind, "t": "%02d:%02d" % [t["hour"], t["minute"]], "c": col})
+	if recents.size() > 9:
+		recents.pop_back()
+	dirty = true
+
+
+func _connect_call() -> void:
+	call_state = "connected"
+	call_t = 0.0
+	call_player.stop()
+	match call_kind:
+		"police":
+			g.set("police_called", 90.0)
+			g._spawn_cop()
+			call_msg = T("dispatched")
+		"ambulance":
+			if money >= 300:
+				money -= 300
+				heal_t = 6.0
+				call_msg = T("onway")
+				dirty = true
+			else:
+				call_msg = T("nomoney")
+		"fire":
+			call_msg = T("fdispatched")
+		"taxi":
+			call_msg = T("onway")
+			g._phone_app(3)
+		"mechanic":
+			call_msg = T("onway")
+			g._phone_app(1)
+		"wrong":
+			call_msg = T("wrong")
+		_:
+			call_msg = T("noanswer")
+
+
+func _end_call() -> void:
+	call_state = ""
+	call_player.stop()
+
+
+func _draw_phone_app(c: Control) -> void:
+	if call_state != "":
+		_draw_call(c)
+		return
+	_title(c, "phone")
+	if phone_tab == 0:
+		_draw_keypad(c)
+	elif phone_tab == 1:
+		_draw_recents(c)
+	else:
+		_draw_contacts(c)
+	var keys := ["keypad", "recents", "contacts"]
+	c.draw_style_box(sbs[6], Rect2(40, 722, 360, 62))
+	for i in 3:
+		var r := Rect2(48 + i * 118, 728, 112, 50)
+		if phone_tab == i:
+			c.draw_style_box(sbs[1], r)
+		_t(c, T(String(keys[i])), r.position + r.size * 0.5, 15)
+		hits.append({"r": r, "a": "ph_tab", "v": i})
+
+
+func _draw_keypad(c: Control) -> void:
+	_t(c, dial if dial != "" else " ", Vector2(220, 205), 40)
+	var digs := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"]
+	for i in 12:
+		var p := Vector2(110.0 + float(i % 3) * 110.0, 290.0 + float(i / 3) * 84.0)
+		c.draw_circle(p, 36.0, Color(1, 1, 1, 0.14))
+		c.draw_arc(p, 36.0, 0.0, TAU, 32, Color(1, 1, 1, 0.4), 2.0, true)
+		_t(c, String(digs[i]), p, 30)
+		hits.append({"r": Rect2(p - Vector2(40, 40), Vector2(80, 80)), "a": "dial", "v": digs[i]})
+	var cp := Vector2(220, 650)
+	c.draw_circle(cp + Vector2(0, 4), 42.0, Color(0, 0, 0, 0.3))
+	c.draw_circle(cp, 40.0, Color(0.1, 0.6, 0.2))
+	c.draw_circle(cp + Vector2(0, -3), 34.0, Color(0.3, 0.85, 0.4))
+	_glyph(c, "phone", cp, 20.0)
+	hits.append({"r": Rect2(cp - Vector2(44, 44), Vector2(88, 88)), "a": "dial_call", "v": null})
+	if dial != "":
+		var bp := Vector2(330, 650)
+		c.draw_circle(bp, 26.0, Color(1, 1, 1, 0.14))
+		_t(c, "<", bp, 28)
+		hits.append({"r": Rect2(bp - Vector2(30, 30), Vector2(60, 60)), "a": "dial_del", "v": null})
+
+
+func _avatar(c: Control, p: Vector2, r: float, col: Color, label: String) -> void:
+	c.draw_circle(p + Vector2(0, 3), r + 1.0, Color(0, 0, 0, 0.3))
+	c.draw_circle(p, r, col.darkened(0.25))
+	c.draw_circle(p + Vector2(0, -r * 0.06), r * 0.88, col)
+	c.draw_arc(p, r * 0.78, deg_to_rad(212), deg_to_rad(328), 20, Color(1, 1, 1, 0.28), r * 0.14, true)
+	_t(c, label.substr(0, 1).to_upper(), p, int(r * 0.95))
+
+
+func _draw_recents(c: Control) -> void:
+	if recents.is_empty():
+		_t(c, T("empty"), Vector2(220, 400), 22, Color(1, 1, 1, 0.7))
+		return
+	for i in mini(recents.size(), 9):
+		var rc: Dictionary = recents[i]
+		var r := Rect2(36, 176 + i * 58, 368, 52)
+		c.draw_style_box(sbs[4], r)
+		_avatar(c, r.position + Vector2(30, 26), 20.0, rc["c"], T(String(rc["n"])))
+		_t(c, T(String(rc["n"])), r.position + Vector2(66, 18), 18, Color.WHITE, 0)
+		_t(c, String(rc["num"]), r.position + Vector2(66, 38), 13, Color(1, 1, 1, 0.6), 0)
+		_t(c, String(rc["t"]), r.position + Vector2(356, 26), 15, Color(1, 1, 1, 0.7), 2)
+		hits.append({"r": r, "a": "redial", "v": i})
+
+
+func _draw_contacts(c: Control) -> void:
+	for i in CONTACTS.size():
+		var ct: Dictionary = CONTACTS[i]
+		var r := Rect2(36, 176 + i * 76, 368, 68)
+		c.draw_style_box(sbs[4], r)
+		_avatar(c, r.position + Vector2(38, 34), 26.0, ct["col"], T(String(ct["name"])))
+		_t(c, T(String(ct["name"])), r.position + Vector2(80, 24), 20, Color.WHITE, 0)
+		_t(c, String(ct["num"]), r.position + Vector2(80, 48), 15, Color(1, 1, 1, 0.6), 0)
+		var bp := r.position + Vector2(328, 34)
+		c.draw_circle(bp, 22.0, Color(0.2, 0.75, 0.35))
+		c.draw_arc(bp, 22.0, 0.0, TAU, 24, Color(1, 1, 1, 0.7), 2.0, true)
+		_glyph(c, "phone", bp, 11.0)
+		hits.append({"r": r, "a": "call_contact", "v": i})
+
+
+func _draw_call(c: Control) -> void:
+	var p := Vector2(220, 300)
+	_avatar(c, p, 72.0, call_col, T(call_name))
+	_t(c, T(call_name), Vector2(220, 410), 34)
+	_t(c, call_num, Vector2(220, 452), 20, Color(1, 1, 1, 0.65))
+	if call_state == "ringing":
+		var dots := ".".repeat(1 + int(call_t * 2.0) % 3)
+		_t(c, T("calling").trim_suffix("...") + dots, Vector2(220, 510), 22, Color(1, 1, 1, 0.85))
+	else:
+		_t(c, "00:%02d" % int(call_t), Vector2(220, 510), 22, Color(0.5, 1, 0.6))
+		_t(c, call_msg, Vector2(220, 560), 20, Color(1, 0.9, 0.5))
+	var ep := Vector2(220, 680)
+	c.draw_circle(ep + Vector2(0, 4), 46.0, Color(0, 0, 0, 0.3))
+	c.draw_circle(ep, 44.0, Color(0.7, 0.1, 0.12))
+	c.draw_circle(ep + Vector2(0, -3), 38.0, Color(0.95, 0.25, 0.25))
+	_t(c, T("end"), ep, 17)
+	hits.append({"r": Rect2(ep - Vector2(48, 48), Vector2(96, 96)), "a": "end_call", "v": null})
 
 
 # ---------------------------------------------------------------- camera app
@@ -640,17 +925,22 @@ func _cap_fps() -> float:
 
 
 func _update_cam_rig() -> void:
-	var base: Vector3 = g.car.position if g.in_car else g.player.position
-	var head := base + Vector3(0, 1.65, 0)
+	var in_car: bool = g.in_car
+	var base: Vector3 = g.car.position if in_car else g.player.position
+	var yaw: float = g.cam_yaw
+	var pitch: float = -(float(g.cam_pitch) - 0.18) * 1.5
+	var fwd := Vector3(-sin(yaw), 0.0, -cos(yaw))
 	if cam_front:
-		var yaw: float = g.car.rotation.y if g.in_car else g.model.rotation.y
-		var fwd := Vector3(-sin(yaw), 0, -cos(yaw))
-		pcam.global_position = head + fwd * 2.4 + Vector3(0, 0.1, 0)
-		pcam.look_at(head + Vector3(0, -0.1, 0))
+		pcam.cull_mask = 0xFFFFF
+		var head := base + Vector3(0, 1.65, 0)
+		pcam.global_position = head + fwd * 2.3 + Vector3(0, 0.05, 0)
+		pcam.look_at(head, Vector3.UP)
+		if not in_car and float(g.speed) < 0.5:
+			g.model.rotation.y = lerp_angle(g.model.rotation.y, yaw, 0.2)
 	else:
-		var gt: Transform3D = g.cam.global_transform
-		pcam.global_transform = gt
-		pcam.global_position = gt.origin - gt.basis.z * 1.2
+		pcam.cull_mask = 0x7FFFF
+		var eye := base + Vector3(0, 1.62 if not in_car else 1.35, 0) + fwd * (0.3 if not in_car else 1.2)
+		pcam.global_transform = Transform3D(Basis.from_euler(Vector3(pitch, yaw, 0.0)), eye)
 	pcam.fov = 75.0 / cam_zoom
 
 
@@ -712,9 +1002,9 @@ func _draw_camera(c: Control) -> void:
 	c.draw_rect(vr, Color.BLACK)
 	c.draw_texture_rect(sv.get_texture(), vr, false)
 	for k in [1, 2]:
-		var fx: float = float(k) / 3.0
-		c.draw_line(vr.position + Vector2(vr.size.x * fx, 0), vr.position + Vector2(vr.size.x * fx, vr.size.y), Color(1, 1, 1, 0.22), 1.0)
-		c.draw_line(vr.position + Vector2(0, vr.size.y * fx), vr.position + Vector2(vr.size.x, vr.size.y * fx), Color(1, 1, 1, 0.22), 1.0)
+		var fr: float = float(k) / 3.0
+		c.draw_line(vr.position + Vector2(vr.size.x * fr, 0), vr.position + Vector2(vr.size.x * fr, vr.size.y), Color(1, 1, 1, 0.22), 1.0)
+		c.draw_line(vr.position + Vector2(0, vr.size.y * fr), vr.position + Vector2(vr.size.x, vr.size.y * fr), Color(1, 1, 1, 0.22), 1.0)
 	if recording:
 		c.draw_circle(vr.position + Vector2(24, 24), 8.0, Color(1, 0.15, 0.15))
 		var secs := float(rec_frames) / _cap_fps()
@@ -872,8 +1162,9 @@ func _draw_photos(c: Control) -> void:
 		if tex != null:
 			c.draw_texture_rect(tex, r, false)
 		if gal[idx]["t"] == "c":
-			c.draw_circle(r.position + r.size * 0.5, 16.0, Color(0, 0, 0, 0.6))
-			c.draw_colored_polygon(PackedVector2Array([r.position + r.size * 0.5 + Vector2(-5, -9), r.position + r.size * 0.5 + Vector2(-5, 9), r.position + r.size * 0.5 + Vector2(10, 0)]), Color.WHITE)
+			var mid := r.position + r.size * 0.5
+			c.draw_circle(mid, 16.0, Color(0, 0, 0, 0.6))
+			c.draw_colored_polygon(PackedVector2Array([mid + Vector2(-5, -9), mid + Vector2(-5, 9), mid + Vector2(10, 0)]), Color.WHITE)
 		c.draw_rect(r, Color(1, 1, 1, 0.5), false, 1.5)
 		hits.append({"r": r, "a": "view", "v": idx})
 	if pages > 1:
@@ -1093,26 +1384,38 @@ func _draw_alarms(c: Control) -> void:
 func _store_items() -> Array:
 	var out: Array = []
 	if store_tab == 0:
-		out.append({"k": "car", "id": "starter", "name": "STARTER", "price": 0, "color": Color(0.8, 0.08, 0.08)})
 		for cc in CARS:
-			out.append({"k": "car", "id": cc["id"], "name": cc["name"], "price": cc["price"], "color": cc["color"]})
+			out.append({"k": "car", "id": cc["id"], "name": cc["name"], "price": cc["price"], "color": cc["color"], "spd": cc["spd"], "acc": cc["acc"], "hnd": cc["hnd"]})
 	elif store_tab == 1:
 		for i in AMMO.size():
-			out.append({"k": "ammo", "idx": i, "name": AMMO[i]["name"], "price": AMMO[i]["price"], "n": AMMO[i]["n"], "color": Color(0.9, 0.7, 0.2)})
+			out.append({"k": "ammo", "idx": i, "name": AMMO[i]["name"], "price": AMMO[i]["price"], "n": AMMO[i]["n"], "color": Color(0.95, 0.7, 0.2)})
 	elif store_tab == 2:
-		out.append({"k": "heli", "id": "heli", "name": "HELICOPTER", "price": 90000, "color": Color(0.3, 0.5, 0.9)})
+		out.append({"k": "heli", "id": "heli", "name": "HELICOPTER", "price": 90000, "color": Color(0.3, 0.5, 0.95)})
 	else:
 		for s in SOON_APPS:
-			out.append({"k": "soon", "name": s, "price": 0, "color": Color(0.5, 0.5, 0.58)})
+			out.append({"k": "soon", "name": s, "price": 0, "color": Color(0.5, 0.5, 0.6)})
 	return out
+
+
+func _stat(c: Control, p: Vector2, label: String, val: float) -> void:
+	_t(c, label, p, 10, Color(1, 1, 1, 0.6), 0)
+	c.draw_rect(Rect2(p.x + 30, p.y - 3, 84, 6), Color(1, 1, 1, 0.15))
+	c.draw_rect(Rect2(p.x + 30, p.y - 3, 84.0 * clampf(val, 0.0, 1.0), 6), Color(0.35, 0.8, 1.0))
 
 
 func _draw_store(c: Control) -> void:
 	_title(c, "store")
-	_t(c, _fmt(money), Vector2(400, 128), 18, Color(1, 0.85, 0.3), 2)
+	var mp := Rect2(292, 108, 112, 36)
+	c.draw_style_box(sbs[4], mp)
+	_t(c, _fmt(money), mp.position + mp.size * 0.5, 16, Color(1, 0.85, 0.3))
 	var keys := ["cars", "ammo", "air", "apps"]
+	c.draw_style_box(sbs[6], Rect2(36, 166, 368, 48))
 	for i in 4:
-		_btn(c, Rect2(40 + i * 90, 170, 86, 38), T(String(keys[i])), "store_tab", i, 1 if store_tab == i else 0, 14)
+		var r := Rect2(40 + i * 91, 170, 87, 40)
+		if store_tab == i:
+			c.draw_style_box(sbs[1], r)
+		_t(c, T(String(keys[i])), r.position + r.size * 0.5, 14)
+		hits.append({"r": r, "a": "store_tab", "v": i})
 	var items := _store_items()
 	var per := 4
 	var pages := maxi((items.size() - 1) / per + 1, 1)
@@ -1122,45 +1425,52 @@ func _draw_store(c: Control) -> void:
 		if idx >= items.size():
 			break
 		var it: Dictionary = items[idx]
-		var r := Rect2(36, 220 + k * 130, 368, 120)
-		c.draw_style_box(sbs[4], r)
-		var sw := Rect2(r.position.x + 10, r.position.y + 10, 100, 100)
-		c.draw_rect(sw, Color(it["color"]).darkened(0.1))
-		var icon := "car"
-		if it["k"] == "ammo":
-			icon = "guns"
-		c.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		g._icon(c, icon, sw.position + sw.size * 0.5, 26.0)
-		_t(c, String(it["name"]), r.position + Vector2(124, 28), 20, Color.WHITE, 0)
-		var br := Rect2(r.position.x + 124, r.position.y + 76, 232, 34)
+		var r2 := Rect2(36, 226 + k * 120, 368, 112)
+		c.draw_style_box(sbs[4], r2)
+		var col: Color = it["color"]
+		var hero := Rect2(r2.position.x + 8, r2.position.y + 8, 96, 96)
+		_grad(c, hero, col.lightened(0.25), col.darkened(0.45))
+		c.draw_rect(hero, Color(1, 1, 1, 0.35), false, 2.0)
 		var kind := String(it["k"])
-		if kind == "soon":
-			_plain(c, br, T("soon"), 5, 16)
-			continue
+		var icon := "car"
 		if kind == "ammo":
-			_t(c, "%s  +%d" % [_fmt(int(it["price"])), int(it["n"])], r.position + Vector2(124, 56), 17, Color(1, 0.85, 0.3), 0)
-			_btn(c, br, T("buy"), "buy_ammo", int(it["idx"]), 2 if money >= int(it["price"]) else 0, 17)
+			icon = "guns"
+		g._icon(c, icon, hero.position + hero.size * 0.5, 24.0)
+		_t(c, String(it["name"]), r2.position + Vector2(116, 22), 18, Color.WHITE, 0)
+		var br := Rect2(r2.position.x + r2.size.x - 124, r2.position.y + r2.size.y - 44, 112, 34)
+		if kind == "soon":
+			_plain(c, br, T("soon"), 5, 15)
 			continue
-		var id := String(it["id"])
-		_t(c, "—" if int(it["price"]) == 0 else _fmt(int(it["price"])), r.position + Vector2(124, 56), 17, Color(1, 0.85, 0.3), 0)
+		if kind == "car":
+			_stat(c, r2.position + Vector2(116, 44), "SPD", float(it["spd"]))
+			_stat(c, r2.position + Vector2(116, 58), "ACC", float(it["acc"]))
+			_stat(c, r2.position + Vector2(116, 72), "HND", float(it["hnd"]))
+		if kind == "ammo":
+			_t(c, "+%d" % int(it["n"]), r2.position + Vector2(116, 52), 22, Color(1, 0.85, 0.3), 0)
 		if kind == "heli":
-			_t(c, T("flysoon"), r.position + Vector2(124, 64), 12, Color(1, 1, 1, 0.5), 0)
+			_t(c, T("flysoon"), r2.position + Vector2(116, 52), 12, Color(1, 1, 1, 0.55), 0)
+		var price := int(it["price"])
+		_t(c, "FREE" if price == 0 else _fmt(price), r2.position + Vector2(116, 94), 16, Color(1, 0.85, 0.3), 0)
+		if kind == "ammo":
+			_btn(c, br, T("buy"), "buy_ammo", int(it["idx"]), 2 if money >= price else 0, 16)
+		elif kind == "heli":
 			if bool(owned.get("heli", false)):
-				_plain(c, br, T("owned"), 5, 16)
+				_plain(c, br, T("owned"), 5, 15)
 			else:
-				_btn(c, br, T("buy"), "buy_heli", null, 2 if money >= 90000 else 0, 17)
-			continue
-		if bool(owned.get(id, false)):
-			if car_sel == id:
-				_plain(c, br, T("selected"), 5, 16)
-			else:
-				_btn(c, br, T("select"), "sel_car", id, 1, 17)
+				_btn(c, br, T("buy"), "buy_heli", null, 2 if money >= price else 0, 16)
 		else:
-			_btn(c, br, T("buy"), "buy_car", id, 2 if money >= int(it["price"]) else 0, 17)
+			var id := String(it["id"])
+			if bool(owned.get(id, false)):
+				if car_sel == id:
+					_plain(c, br, T("selected"), 5, 14)
+				else:
+					_btn(c, br, T("select"), "sel_car", id, 1, 16)
+			else:
+				_btn(c, br, T("buy"), "buy_car", id, 2 if money >= price else 0, 16)
 	if pages > 1:
-		_btn(c, Rect2(60, 745, 100, 40), "<", "store_prev", null, 0, 22)
-		_t(c, "%d / %d" % [store_page + 1, pages], Vector2(220, 765), 18)
-		_btn(c, Rect2(280, 745, 100, 40), ">", "store_next", null, 0, 22)
+		_btn(c, Rect2(60, 712, 100, 38), "<", "store_prev", null, 0, 22)
+		_t(c, "%d / %d" % [store_page + 1, pages], Vector2(220, 731), 18)
+		_btn(c, Rect2(280, 712, 100, 38), ">", "store_next", null, 0, 22)
 
 
 # ---------------------------------------------------------------- settings app
@@ -1175,21 +1485,133 @@ func _draw_settings(c: Control) -> void:
 	for i in WALLS.size():
 		var r2 := Rect2(40 + i * 62, 352, 54, 70)
 		var w: Array = WALLS[i]
-		var top: Color = w[0]
-		var bot: Color = w[1]
-		c.draw_polygon(PackedVector2Array([r2.position, Vector2(r2.end.x, r2.position.y), r2.end, Vector2(r2.position.x, r2.end.y)]), PackedColorArray([top, top, bot, bot]))
+		_grad(c, r2, w[0], w[1])
 		c.draw_rect(r2, Color(1, 1, 1, 0.95 if wall_idx == i else 0.3), false, 3.0 if wall_idx == i else 1.5)
 		hits.append({"r": r2, "a": "set_wall", "v": i})
-	_btn(c, Rect2(40, 435, 360, 44), T("photos") + "  ›", "wall_photo", null, 0, 18)
-	_btn(c, Rect2(40, 505, 360, 44), "%s: %s" % [T("shadows"), T("on") if shadows else T("off")], "toggle_shadows", null, 2 if shadows else 0, 18)
-	_btn(c, Rect2(40, 560, 360, 44), "%s: %s" % [T("fps"), T("on") if show_fps else T("off")], "toggle_fps", null, 2 if show_fps else 0, 18)
-	_t(c, T("volume"), Vector2(40, 640), 18, Color(1, 1, 1, 0.8), 0)
-	_btn(c, Rect2(160, 620, 56, 44), "-", "vol", -0.1, 0, 26)
-	_t(c, "%d%%" % int(volume * 100.0), Vector2(262, 642), 22)
-	_btn(c, Rect2(312, 620, 56, 44), "+", "vol", 0.1, 0, 26)
+	_btn(c, Rect2(40, 435, 360, 44), T("photos") + "  >", "wall_photo", null, 0, 18)
+	_btn(c, Rect2(40, 495, 360, 44), "%s: %s" % [T("shadows"), T("on") if shadows else T("off")], "toggle_shadows", null, 2 if shadows else 0, 18)
+	_btn(c, Rect2(40, 550, 360, 44), "%s: %s" % [T("fps"), T("on") if show_fps else T("off")], "toggle_fps", null, 2 if show_fps else 0, 18)
+	_t(c, T("volume"), Vector2(40, 628), 18, Color(1, 1, 1, 0.8), 0)
+	_btn(c, Rect2(170, 608, 56, 40), "-", "vol", -0.1, 0, 26)
+	_t(c, "%d%%" % int(volume * 100.0), Vector2(270, 628), 22)
+	_btn(c, Rect2(318, 608, 56, 40), "+", "vol", 0.1, 0, 26)
+	_t(c, T("phonesize"), Vector2(40, 686), 18, Color(1, 1, 1, 0.8), 0)
+	_btn(c, Rect2(170, 666, 56, 40), "-", "zoom", -0.08, 0, 26)
+	_t(c, "%d%%" % int(float(g.phone_scale) * 100.0), Vector2(270, 686), 22)
+	_btn(c, Rect2(318, 666, 56, 40), "+", "zoom", 0.08, 0, 26)
+
+
+# ---------------------------------------------------------------- glyphs and round icons
+
+func _glyph(c: Control, kind: String, p: Vector2, u: float) -> void:
+	var w := Color(1, 1, 1, 0.97)
+	match kind:
+		"pin":
+			c.draw_circle(p + Vector2(0, -u * 0.35), u * 0.62, w)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-u * 0.5, -u * 0.1), p + Vector2(u * 0.5, -u * 0.1), p + Vector2(0, u * 0.95)]), w)
+			c.draw_circle(p + Vector2(0, -u * 0.35), u * 0.25, Color(0.1, 0.5, 0.3))
+		"car":
+			g._icon(c, "car", p, u * 0.95)
+		"gun":
+			g._icon(c, "guns", p, u * 0.9)
+		"taxi":
+			g._icon(c, "car", p + Vector2(0, u * 0.15), u * 0.95)
+			c.draw_rect(Rect2(p + Vector2(-0.3, -1.0) * u, Vector2(0.6, 0.28) * u), w)
+		"clock":
+			c.draw_arc(p, u * 0.95, 0.0, TAU, 32, w, u * 0.16, true)
+			c.draw_line(p, p + Vector2(0, -u * 0.6), w, u * 0.14)
+			c.draw_line(p, p + Vector2(u * 0.45, u * 0.2), w, u * 0.14)
+		"bag":
+			c.draw_rect(Rect2(p + Vector2(-0.8, -0.3) * u, Vector2(1.6, 1.3) * u), w)
+			c.draw_arc(p + Vector2(0, -0.3 * u), u * 0.45, PI, TAU, 16, w, u * 0.16, true)
+		"phone":
+			c.draw_arc(p + Vector2(0, u * 0.35), u * 0.78, deg_to_rad(205), deg_to_rad(335), 20, w, u * 0.42, true)
+			c.draw_circle(p + Vector2(-u * 0.72, u * 0.22), u * 0.3, w)
+			c.draw_circle(p + Vector2(u * 0.72, u * 0.22), u * 0.3, w)
+		"camera":
+			c.draw_rect(Rect2(p + Vector2(-1.0, -0.55) * u, Vector2(2.0, 1.4) * u), w)
+			c.draw_rect(Rect2(p + Vector2(-0.4, -0.85) * u, Vector2(0.8, 0.35) * u), w)
+			c.draw_circle(p + Vector2(0, 0.15 * u), u * 0.5, Color(0.25, 0.28, 0.35))
+			c.draw_circle(p + Vector2(0, 0.15 * u), u * 0.28, Color(0.75, 0.85, 1.0))
+		"photo":
+			c.draw_rect(Rect2(p + Vector2(-1.0, -0.8) * u, Vector2(2.0, 1.6) * u), w)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-0.9, 0.7) * u, p + Vector2(-0.2, -0.2) * u, p + Vector2(0.25, 0.4) * u, p + Vector2(0.55, 0.0) * u, p + Vector2(0.9, 0.7) * u]), Color(0.85, 0.3, 0.5))
+			c.draw_circle(p + Vector2(0.45, -0.4) * u, u * 0.2, Color(1, 0.8, 0.3))
+		"gear":
+			c.draw_arc(p, u * 0.55, 0.0, TAU, 24, w, u * 0.3, true)
+			for k in 8:
+				var a := float(k) * TAU / 8.0
+				c.draw_line(p + Vector2(cos(a), sin(a)) * u * 0.7, p + Vector2(cos(a), sin(a)) * u * 1.0, w, u * 0.3)
+		"chat":
+			c.draw_circle(p + Vector2(0, -u * 0.1), u * 0.85, w)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-0.5, 0.4) * u, p + Vector2(-0.8, 1.0) * u, p + Vector2(0.0, 0.7) * u]), w)
+			for k in 3:
+				c.draw_circle(p + Vector2((float(k) - 1.0) * 0.4, -0.1) * u, u * 0.1, Color(0.2, 0.5, 0.9))
+		"game":
+			c.draw_rect(Rect2(p + Vector2(-1.1, -0.5) * u, Vector2(2.2, 1.1) * u), w)
+			c.draw_circle(p + Vector2(-0.6, 0.05) * u, u * 0.22, Color(0.7, 0.2, 0.3))
+			c.draw_circle(p + Vector2(0.55, -0.1) * u, u * 0.14, Color(0.7, 0.2, 0.3))
+			c.draw_circle(p + Vector2(0.8, 0.2) * u, u * 0.14, Color(0.7, 0.2, 0.3))
+
+
+func _icon_tex(key: String) -> Texture2D:
+	if icon_tex.has(key):
+		return icon_tex[key]
+	var p := "%s%s.png" % [ICON_DIR, key]
+	var t: Texture2D = null
+	if ResourceLoader.exists(p):
+		t = load(p) as Texture2D
+	icon_tex[key] = t
+	return t
+
+
+func _round_icon(c: Control, p: Vector2, r: float, it: Dictionary, label: String, dim: bool, show_label: bool) -> void:
+	var c1: Color = it["c1"]
+	var c2: Color = it["c2"]
+	var tex := _icon_tex(String(it["key"]))
+	c.draw_circle(p + Vector2(0, 5), r + 1.0, Color(0, 0, 0, 0.35))
+	if tex != null:
+		c.draw_texture_rect(tex, Rect2(p - Vector2(r, r), Vector2(r, r) * 2.0), false)
+	else:
+		c.draw_circle(p, r, c2)
+		c.draw_circle(p + Vector2(0, -r * 0.07), r * 0.9, c2.lerp(c1, 0.45))
+		c.draw_circle(p + Vector2(0, -r * 0.14), r * 0.76, c1)
+		c.draw_arc(p, r * 0.84, deg_to_rad(212), deg_to_rad(328), 24, Color(1, 1, 1, 0.3), r * 0.16, true)
+		c.draw_arc(p, r, 0.0, TAU, 48, Color(1, 1, 1, 0.45), 2.0, true)
+		_glyph(c, String(it["glyph"]), p + Vector2(0, -r * 0.02), r * 0.5)
+	if dim:
+		c.draw_circle(p, r, Color(0, 0, 0, 0.45))
+	var h := r * 2.0 + 16.0
+	if show_label:
+		_t(c, label, p + Vector2(0, r + 17.0), 14, Color(1, 1, 1, 0.55 if dim else 0.95))
+		h += 20.0
+	hits.append({"r": Rect2(p - Vector2(r + 8.0, r + 8.0), Vector2(r * 2.0 + 16.0, h)), "a": "open", "v": int(it["app"])})
 
 
 # ---------------------------------------------------------------- drawing entry points
+
+func draw_home(c: Control) -> void:
+	hits.clear()
+	var t := Time.get_time_dict_from_system()
+	_t(c, "%02d:%02d" % [t["hour"], t["minute"]], Vector2(220, 175), 72)
+	var dt := Time.get_date_dict_from_system()
+	_t(c, "%04d-%02d-%02d" % [dt["year"], dt["month"], dt["day"]], Vector2(220, 235), 20, Color(1, 1, 1, 0.75))
+	for sgn in [0, 1]:
+		var cc := Vector2(78.0 + float(sgn) * 284.0, 175.0)
+		c.draw_circle(cc, 20.0, Color(1, 1, 1, 0.12))
+		c.draw_arc(cc, 20.0, 0.0, TAU, 20, Color(1, 1, 1, 0.55), 2.0, true)
+		_t(c, "+" if sgn == 1 else "-", cc, 26, Color(1, 1, 1, 0.85))
+		hits.append({"r": Rect2(cc - Vector2(24, 24), Vector2(48, 48)), "a": "zoom", "v": 0.08 if sgn == 1 else -0.08})
+	for i in HOME_GRID.size():
+		var it: Dictionary = HOME_GRID[i]
+		var p := Vector2(84.0 + float(i % 4) * 91.0, 330.0 + float(i / 4) * 125.0)
+		_round_icon(c, p, 34.0, it, T(String(it["key"])), int(it["app"]) >= 10, true)
+	c.draw_style_box(sbs[6], Rect2(42, 690, 356, 104))
+	for i in HOME_DOCK.size():
+		var it2: Dictionary = HOME_DOCK[i]
+		var p2 := Vector2(84.0 + float(i) * 91.0, 742.0)
+		_round_icon(c, p2, 34.0, it2, "", false, false)
+
 
 func draw_bg(c: Control) -> void:
 	var r := Rect2(42, 42, 356, 816)
@@ -1201,9 +1623,7 @@ func draw_bg(c: Control) -> void:
 		c.draw_rect(r, Color(0, 0, 0, 0.22))
 	else:
 		var w: Array = WALLS[clampi(wall_idx, 0, WALLS.size() - 1)]
-		var top: Color = w[0]
-		var bot: Color = w[1]
-		c.draw_polygon(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]), PackedColorArray([top, top, bot, bot]))
+		_grad(c, r, w[0], w[1])
 	if app != -1:
 		c.draw_rect(r, Color(0, 0, 0, 0.5))
 
@@ -1221,6 +1641,8 @@ func draw(c: Control) -> void:
 			_draw_store(c)
 		8:
 			_draw_settings(c)
+		9:
+			_draw_phone_app(c)
 
 
 func draw_hud(ui: Control) -> void:
