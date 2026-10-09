@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GODOT_VERSION: "4.3"
+      ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
 
@@ -16,12 +17,17 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
+      - name: Prepare Android SDK (preinstalled on the runner)
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+          CT="$ANDROID_HOME/cmdline-tools"
+          ls "$ANDROID_HOME"
+          ls "$CT"
+          if [ ! -e "$CT/latest" ]; then
+            FIRST=$(ls "$CT" | head -1)
+            sudo ln -s "$CT/$FIRST" "$CT/latest"
+          fi
+          yes | "$CT/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$CT/latest/bin/sdkmanager" "platform-tools" "build-tools;34.0.0" "platforms;android-34" || true
 
       - name: Download Godot and export templates
         run: |
