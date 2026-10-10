@@ -70,7 +70,6 @@ const DEFAULT_RES := [0, 60, 180, 24, 120]
 const RECOIL := [0.0, 0.035, 0.012, 0.06, 0.02]
 const FLASH_SIZE := [0.0, 0.8, 1.0, 1.5, 1.2]
 const TRACER_COL := [Color.WHITE, Color(1.0, 0.85, 0.45), Color(1.0, 0.7, 0.3), Color(1.0, 0.9, 0.6), Color(1.0, 0.95, 0.7)]
-const APP_NAMES := ["MAP", "MY CAR", "GUNS", "TAXI", "CAMERA", "PHOTOS", "CLOCK", "STORE", "SETTINGS"]
 
 
 class ArmIK extends SkeletonModifier3D:
@@ -354,7 +353,7 @@ var map_open := false
 var wheel_open := false
 var phone_open := false
 var phone_t := 0.0
-var phone_scale := 0.55
+var phone_scale := 0.8
 var phone_raise_t := 0.0
 var bld_rects: Array[Rect2] = []
 var block_rects: Array[Rect2] = []
@@ -427,11 +426,11 @@ var ped_glbs: Array[String] = []
 var sb_body: StyleBoxFlat
 var sb_screen: StyleBoxFlat
 var sb_notch: StyleBoxFlat
-var sb_apps: Array[StyleBoxFlat] = []
 var sb_pill: StyleBoxFlat
 var sb_btn: StyleBoxFlat
 var sb_map: StyleBoxFlat
 var apps = null
+var police_called := 0.0
 
 
 func _ready() -> void:
@@ -555,12 +554,6 @@ func _prect() -> Rect2:
 	var k := phone_t * phone_t * (3.0 - 2.0 * phone_t)
 	var y := lerpf(s.y + 30.0, s.y - sz.y - 20.0, k)
 	return Rect2(s.x * PHONE_X_FRAC - sz.x * 0.5, y, sz.x, sz.y)
-
-
-func _icon_rect(i: int) -> Rect2:
-	var col := i % 3
-	var row := i / 3
-	return Rect2(46.0 + float(col) * 128.0, 190.0 + float(row) * 160.0, 104.0, 104.0)
 
 
 func _wheel_pos(i: int) -> Vector2:
@@ -725,15 +718,6 @@ func _init_assets() -> void:
 	sb_notch = StyleBoxFlat.new()
 	sb_notch.bg_color = Color(0.0, 0.0, 0.0)
 	sb_notch.set_corner_radius_all(13)
-	var icol := [
-		Color(0.2, 0.75, 0.45), Color(0.25, 0.5, 0.95), Color(0.95, 0.75, 0.2), Color(0.95, 0.55, 0.15),
-		Color(0.55, 0.45, 0.9), Color(0.9, 0.4, 0.6), Color(0.3, 0.3, 0.38), Color(0.2, 0.7, 0.8), Color(0.5, 0.5, 0.55)
-	]
-	for c in icol:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = c
-		sb.set_corner_radius_all(28)
-		sb_apps.append(sb)
 	sb_pill = StyleBoxFlat.new()
 	sb_pill.bg_color = Color(0.05, 0.06, 0.08, 0.7)
 	sb_pill.set_corner_radius_all(22)
@@ -2260,7 +2244,8 @@ func _stopped() -> bool:
 func _update_officers(delta: float) -> void:
 	var tgt3 := car.position if in_car else player.position
 	var tp := Vector2(tgt3.x, tgt3.z)
-	var chasing := stars > 0 and not dead
+	var chasing := (stars > 0 or police_called > 0.0) and not dead
+	var hostile := stars > 0 and not dead
 	var go_home := (not chasing) or _fleeing()
 	for i in range(officers.size() - 1, -1, -1):
 		var o := officers[i]
@@ -2307,7 +2292,7 @@ func _update_officers(delta: float) -> void:
 			if d > 11.0:
 				goal = tp
 				has_goal = true
-			o.aiming = d < 36.0
+			o.aiming = hostile and d < 36.0
 			o.shoot_cd -= delta
 			if o.aiming and o.shoot_cd <= 0.0:
 				o.shoot_cd = randf_range(0.7, 1.2)
@@ -2481,7 +2466,8 @@ func _update_cop(c: Cop, delta: float) -> void:
 	var tp := Vector2(tgt3.x, tgt3.z)
 	var cp := Vector2(c.position.x, c.position.z)
 	var d := cp.distance_to(tp)
-	var chasing := stars > 0 and not dead
+	var hostile := stars > 0 and not dead
+	var chasing := (stars > 0 or police_called > 0.0) and not dead
 
 	if c.mat_a != null and c.mat_b != null:
 		var on := int(time * 6.0) % 2 == 0
@@ -2557,7 +2543,7 @@ func _update_cop(c: Cop, delta: float) -> void:
 		c.stuck_t = 0.0
 	c.speed = actual
 
-	if drive and d < 3.4 and absf(c.speed) > 5.0:
+	if hostile and drive and d < 3.4 and absf(c.speed) > 5.0:
 		_hurt_player(30.0 * delta)
 
 
@@ -3023,36 +3009,6 @@ func _draw_ui() -> void:
 		_txt(ui, "WASTED", s * 0.5, 130, Color(0.9, 0.1, 0.1))
 
 
-func _glyph(i: int, c: Vector2) -> void:
-	var w := Color(1, 1, 1, 0.95)
-	if i == 0:
-		pc.draw_circle(c + Vector2(0, -8), 18.0, w)
-		pc.draw_colored_polygon(PackedVector2Array([c + Vector2(-13, 2), c + Vector2(13, 2), c + Vector2(0, 28)]), w)
-		pc.draw_circle(c + Vector2(0, -8), 7.0, Color(0.2, 0.75, 0.45))
-	elif i == 1 or i == 3:
-		_icon(pc, "car", c, 22.0)
-	elif i == 2:
-		_icon(pc, "guns", c, 22.0)
-	elif i == 4:
-		pc.draw_rect(Rect2(c + Vector2(-26, -16), Vector2(52, 36)), w, false, 4.0)
-		pc.draw_arc(c + Vector2(0, 2), 11.0, 0.0, TAU, 24, w, 4.0, true)
-	elif i == 5:
-		pc.draw_rect(Rect2(c + Vector2(-26, -22), Vector2(52, 44)), w, false, 4.0)
-		pc.draw_colored_polygon(PackedVector2Array([c + Vector2(-22, 18), c + Vector2(-6, -2), c + Vector2(6, 10), c + Vector2(14, 2), c + Vector2(22, 18)]), w)
-	elif i == 6:
-		pc.draw_arc(c, 26.0, 0.0, TAU, 32, w, 4.0, true)
-		pc.draw_line(c, c + Vector2(0, -16), w, 4.0)
-		pc.draw_line(c, c + Vector2(12, 6), w, 4.0)
-	elif i == 7:
-		pc.draw_rect(Rect2(c + Vector2(-22, -8), Vector2(44, 32)), w, false, 4.0)
-		pc.draw_arc(c + Vector2(0, -8), 12.0, PI, TAU, 16, w, 4.0, true)
-	else:
-		pc.draw_arc(c, 17.0, 0.0, TAU, 24, w, 4.0, true)
-		for k in 8:
-			var a := float(k) * TAU / 8.0
-			pc.draw_line(c + Vector2(cos(a), sin(a)) * 19.0, c + Vector2(cos(a), sin(a)) * 27.0, w, 5.0)
-
-
 func _draw_phone() -> void:
 	var r := _prect()
 	var vs := _vp()
@@ -3063,29 +3019,17 @@ func _draw_phone() -> void:
 	pc.draw_style_box(sb_screen, Rect2(20, 20, 400, 860))
 	if apps != null:
 		apps.draw_bg(pc)
-	else:
-		pc.draw_circle(Vector2(320, 270), 120.0, Color(0.35, 0.25, 0.8, 0.16))
-		pc.draw_circle(Vector2(130, 650), 140.0, Color(0.1, 0.55, 0.9, 0.12))
 	pc.draw_style_box(sb_notch, Rect2(165, 30, 110, 26))
 	var t := Time.get_time_dict_from_system()
 	pc.draw_string(ThemeDB.fallback_font, Vector2(52, 90), "%02d:%02d" % [t["hour"], t["minute"]], HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color.WHITE)
 	pc.draw_string(ThemeDB.fallback_font, Vector2(290, 90), "5G", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 1, 1, 0.8))
 	pc.draw_rect(Rect2(342, 70, 40, 20), Color(1, 1, 1, 0.9), false, 2.0)
 	pc.draw_rect(Rect2(345, 73, 28, 14), Color(0.4, 0.9, 0.5))
-	if apps != null and apps.app_open():
-		apps.draw(pc)
-	else:
-		_txt(pc, "LOS CITY", Vector2(140, 135), 34, Color(1, 1, 1, 0.9))
-		for sgn in [0, 1]:
-			var cc := Vector2(330 + sgn * 50, 130)
-			pc.draw_circle(cc, 22.0, Color(1, 1, 1, 0.14))
-			pc.draw_arc(cc, 22.0, 0.0, TAU, 20, Color(1, 1, 1, 0.8), 2.0, true)
-			_txt(pc, "+" if sgn == 1 else "-", cc, 30)
-		for i in 9:
-			var ir := _icon_rect(i)
-			pc.draw_style_box(sb_apps[i], ir)
-			_glyph(i, ir.position + ir.size * 0.5 + Vector2(0, -2))
-			_txt(pc, String(APP_NAMES[i]), ir.position + Vector2(52, 124), 19, Color(1, 1, 1, 0.95))
+	if apps != null:
+		if apps.app_open():
+			apps.draw(pc)
+		else:
+			apps.draw_home(pc)
 	var hc := Vector2(220, 845)
 	pc.draw_circle(hc, 30.0, Color(1, 1, 1, 0.2))
 	pc.draw_arc(hc, 30.0, 0.0, TAU, 28, Color(1, 1, 1, 0.85), 3.0, true)
@@ -3309,22 +3253,11 @@ func _set_phone(open: bool) -> void:
 func _phone_touch(p: Vector2) -> void:
 	var r := _prect()
 	var lp := (p - r.position) / phone_scale
-	if apps != null and apps.app_open():
+	if apps != null:
 		apps.touch(lp)
-		return
-	if lp.distance_to(Vector2(330, 130)) < 30.0:
-		phone_scale = maxf(0.4, phone_scale - 0.08)
-		return
-	if lp.distance_to(Vector2(380, 130)) < 30.0:
-		phone_scale = minf(1.1, phone_scale + 0.08)
 		return
 	if lp.distance_to(Vector2(220, 845)) < 40.0:
 		_set_phone(false)
-		return
-	for i in 9:
-		if _icon_rect(i).has_point(lp):
-			_phone_app(i)
-			return
 
 
 func _phone_app(i: int) -> void:
@@ -3520,6 +3453,7 @@ func _physics_process(delta: float) -> void:
 	raise_t = maxf(raise_t - delta, 0.0)
 	phone_raise_t = maxf(phone_raise_t - delta, 0.0)
 	recoil = move_toward(recoil, 0.0, 0.6 * delta)
+	police_called = maxf(police_called - delta, 0.0)
 
 	var armed_now := aim_t > 0.0 and cur_weapon > 0 and not in_car and not phone_open
 	if armed_now and not prev_armed:
