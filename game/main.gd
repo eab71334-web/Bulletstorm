@@ -1,5 +1,8 @@
 extends Node3D
 
+# اجعلها true لو تبي ترجع رسالة التشخيص (IK / ANIM) فوق الشاشة
+const DEBUG_OVERLAY := false
+
 # ===================== الملفات (كلها اختيارية) =====================
 const GLB_PATH := "res://game/character.glb"
 const GLB_YAW := PI
@@ -49,8 +52,13 @@ const CAR_BRAKE := 32.0
 const WHEELBASE := 4.2
 const GAUGE_MAX := 220.0
 const MAP_HALF := 180.0
-const MINI_SIZE := 300.0
-const MINI_VIEW := 160.0
+const MINI_W := 380.0
+const MINI_H := 240.0
+const MINI_VIEW := 190.0
+
+const HELI_SPEED := 34.0
+const HELI_MAX_ALT := 130.0
+const WHEEL_SLOWMO := 0.3
 
 const PED_COUNT := 24
 const MAX_STARS := 5
@@ -302,6 +310,7 @@ var stick_id := -1
 var look_id := -1
 var jump_id := -1
 var fire_id := -1
+var down_id := -1
 var stick_origin := Vector2.ZERO
 var stick_vec := Vector2.ZERO
 var want_jump := false
@@ -349,8 +358,21 @@ var car_accel_s := 0.0
 var in_car := false
 var near_car := false
 
+# ---- helicopter ----
+var heli: CharacterBody3D
+var heli_vis: Node3D
+var heli_rotor: Node3D
+var heli_tail: Node3D
+var heli_speed := 0.0
+var heli_vy := 0.0
+var rotor_rpm := 0.0
+var heli_snd: AudioStreamPlayer
+var in_heli := false
+var near_heli := false
+
 var map_open := false
 var wheel_open := false
+var wheel_a := 0.0
 var phone_open := false
 var phone_t := 0.0
 var phone_scale := 0.8
@@ -424,11 +446,18 @@ var off_pants: StandardMaterial3D
 var ped_glbs: Array[String] = []
 
 var sb_body: StyleBoxFlat
-var sb_screen: StyleBoxFlat
+var sb_bezel: StyleBoxFlat
+var sb_frame: StyleBoxFlat
 var sb_notch: StyleBoxFlat
+var sb_homebar: StyleBoxFlat
 var sb_pill: StyleBoxFlat
 var sb_btn: StyleBoxFlat
 var sb_map: StyleBoxFlat
+var sb_mini: StyleBoxFlat
+var sb_mini_shadow: StyleBoxFlat
+var sb_hp_bg: StyleBoxFlat
+var sb_hp_fill: StyleBoxFlat
+var sb_hp_shine: StyleBoxFlat
 var apps = null
 var police_called := 0.0
 
@@ -449,29 +478,30 @@ func _ready() -> void:
 	_set_weapon(1, false)
 	for i in PED_COUNT:
 		_spawn_ped()
-	var ikt := "IK: YES" if (player_ik != null and player_ik.ok) else "IK: NO"
-	var lgt := "LEGS: YES" if (player_ik != null and player_ik.legs_ok) else "LEGS: NO"
-	var lines: Array[String] = []
-	lines.append("%s | %s | HAND: %s | %s" % [ikt, lgt, hand_bone_name if hand_bone_name != "" else "NOT FOUND", char_scale_dbg])
-	lines.append("ANIM FILES: %d | TRACKS: %d/%d" % [anim_files, anim_kept, anim_total])
-	var st: Dictionary = anim_stats.get("player", {})
-	for k in ["0_idle", "0_walk", "0_run"]:
-		if st.has(k):
-			lines.append("%s  %s" % [k, st[k]])
-		else:
-			lines.append("%s  MISSING" % k)
-	var miss: Dictionary = anim_miss.get("player", {})
-	if miss.has("0_walk") and not (miss["0_walk"] as Array).is_empty():
-		lines.append("WALK MISS: " + ", ".join(PackedStringArray(miss["0_walk"])))
-	if char_skeleton != null:
-		var names: Array[String] = []
-		for i in char_skeleton.get_bone_count():
-			var bn := char_skeleton.get_bone_name(i)
-			var lw := bn.to_lower()
-			if (lw.contains("arm") or lw.contains("leg")) and names.size() < 4:
-				names.append(bn)
-		lines.append("CHAR BONES: " + ", ".join(PackedStringArray(names)))
-	_toast("\n".join(PackedStringArray(lines)), 16.0)
+	if DEBUG_OVERLAY:
+		var ikt := "IK: YES" if (player_ik != null and player_ik.ok) else "IK: NO"
+		var lgt := "LEGS: YES" if (player_ik != null and player_ik.legs_ok) else "LEGS: NO"
+		var lines: Array[String] = []
+		lines.append("%s | %s | HAND: %s | %s" % [ikt, lgt, hand_bone_name if hand_bone_name != "" else "NOT FOUND", char_scale_dbg])
+		lines.append("ANIM FILES: %d | TRACKS: %d/%d" % [anim_files, anim_kept, anim_total])
+		var st: Dictionary = anim_stats.get("player", {})
+		for k in ["0_idle", "0_walk", "0_run"]:
+			if st.has(k):
+				lines.append("%s  %s" % [k, st[k]])
+			else:
+				lines.append("%s  MISSING" % k)
+		var miss: Dictionary = anim_miss.get("player", {})
+		if miss.has("0_walk") and not (miss["0_walk"] as Array).is_empty():
+			lines.append("WALK MISS: " + ", ".join(PackedStringArray(miss["0_walk"])))
+		if char_skeleton != null:
+			var names: Array[String] = []
+			for i in char_skeleton.get_bone_count():
+				var bn := char_skeleton.get_bone_name(i)
+				var lw := bn.to_lower()
+				if (lw.contains("arm") or lw.contains("leg")) and names.size() < 4:
+					names.append(bn)
+			lines.append("CHAR BONES: " + ", ".join(PackedStringArray(names)))
+		_toast("\n".join(PackedStringArray(lines)), 16.0)
 	if ResourceLoader.exists("res://game/apps.gd"):
 		var sc = load("res://game/apps.gd")
 		if sc != null:
@@ -531,7 +561,7 @@ func _phone_btn_center() -> Vector2:
 
 func _mini_rect() -> Rect2:
 	var s := _vp()
-	return Rect2(s.x - MINI_SIZE - 40.0, 40.0, MINI_SIZE, MINI_SIZE)
+	return Rect2(s.x - MINI_W - 40.0, 40.0, MINI_W, MINI_H)
 
 
 func _big_rect() -> Rect2:
@@ -559,6 +589,14 @@ func _prect() -> Rect2:
 func _wheel_pos(i: int) -> Vector2:
 	var a := -PI * 0.5 + TAU * float(i) / float(WEAPONS.size())
 	return _vp() * 0.5 + Vector2(cos(a), sin(a)) * 250.0
+
+
+func _cur_yaw() -> float:
+	if in_heli and heli != null:
+		return heli.rotation.y
+	if in_car:
+		return car.rotation.y
+	return model.rotation.y
 
 
 func _txt(c: Control, t: String, p: Vector2, size: int, col: Color = Color.WHITE) -> void:
@@ -707,17 +745,27 @@ func _init_assets() -> void:
 		if ResourceLoader.exists(path):
 			ped_glbs.append(path)
 
+	# ---- شكل الهاتف (حواف سوداء رفيعة + إطار فضي + جزيرة) ----
 	sb_body = StyleBoxFlat.new()
-	sb_body.bg_color = Color(0.03, 0.03, 0.05)
-	sb_body.set_corner_radius_all(64)
-	sb_body.border_color = Color(0.55, 0.55, 0.62)
-	sb_body.set_border_width_all(6)
-	sb_screen = StyleBoxFlat.new()
-	sb_screen.bg_color = Color(0.07, 0.1, 0.22)
-	sb_screen.set_corner_radius_all(46)
+	sb_body.bg_color = Color(0.02, 0.02, 0.03)
+	sb_body.set_corner_radius_all(66)
+	sb_bezel = StyleBoxFlat.new()
+	sb_bezel.draw_center = false
+	sb_bezel.border_color = Color(0.02, 0.02, 0.03)
+	sb_bezel.set_border_width_all(20)
+	sb_bezel.set_corner_radius_all(66)
+	sb_frame = StyleBoxFlat.new()
+	sb_frame.draw_center = false
+	sb_frame.border_color = Color(0.66, 0.67, 0.74)
+	sb_frame.set_border_width_all(5)
+	sb_frame.set_corner_radius_all(66)
 	sb_notch = StyleBoxFlat.new()
 	sb_notch.bg_color = Color(0.0, 0.0, 0.0)
-	sb_notch.set_corner_radius_all(13)
+	sb_notch.set_corner_radius_all(17)
+	sb_homebar = StyleBoxFlat.new()
+	sb_homebar.bg_color = Color(1, 1, 1, 0.85)
+	sb_homebar.set_corner_radius_all(3)
+
 	sb_pill = StyleBoxFlat.new()
 	sb_pill.bg_color = Color(0.05, 0.06, 0.08, 0.7)
 	sb_pill.set_corner_radius_all(22)
@@ -733,6 +781,29 @@ func _init_assets() -> void:
 	sb_map.set_corner_radius_all(28)
 	sb_map.border_color = Color(1, 1, 1, 0.9)
 	sb_map.set_border_width_all(4)
+
+	# ---- الخريطة المصغرة (مستطيل أبيض) ----
+	sb_mini = StyleBoxFlat.new()
+	sb_mini.draw_center = false
+	sb_mini.border_color = Color(0.16, 0.18, 0.24)
+	sb_mini.set_border_width_all(4)
+	sb_mini.set_corner_radius_all(26)
+	sb_mini_shadow = StyleBoxFlat.new()
+	sb_mini_shadow.bg_color = Color(0, 0, 0, 0.3)
+	sb_mini_shadow.set_corner_radius_all(28)
+
+	# ---- شريط الدم (أحمر) ----
+	sb_hp_bg = StyleBoxFlat.new()
+	sb_hp_bg.bg_color = Color(0.12, 0.02, 0.03, 0.75)
+	sb_hp_bg.set_corner_radius_all(15)
+	sb_hp_bg.border_color = Color(1, 1, 1, 0.9)
+	sb_hp_bg.set_border_width_all(2)
+	sb_hp_fill = StyleBoxFlat.new()
+	sb_hp_fill.bg_color = Color(0.88, 0.08, 0.1)
+	sb_hp_fill.set_corner_radius_all(11)
+	sb_hp_shine = StyleBoxFlat.new()
+	sb_hp_shine.bg_color = Color(1, 1, 1, 0.25)
+	sb_hp_shine.set_corner_radius_all(3)
 
 
 func _build_bullet_templates() -> void:
@@ -1255,6 +1326,20 @@ func _synth_engine() -> AudioStreamWAV:
 	return _wav(s, rate, true)
 
 
+func _synth_heli() -> AudioStreamWAV:
+	var rate := 22050
+	var n := rate
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lp := 0.0
+	for i in n:
+		var t := float(i) / rate
+		lp += ((randf() * 2.0 - 1.0) - lp) * 0.08
+		var chop := pow(absf(sin(PI * 12.0 * t)), 3.0)
+		s[i] = (lp * chop * 1.4 + sin(TAU * 38.0 * t) * 0.18 * chop) * 0.7
+	return _wav(s, rate, true)
+
+
 func _synth_skid() -> AudioStreamWAV:
 	var rate := 22050
 	var n := rate
@@ -1312,7 +1397,7 @@ func _load_sound_file(key: String) -> AudioStream:
 		if ResourceLoader.exists(p):
 			var s := load(p) as AudioStream
 			if s != null:
-				if key in ["engine", "siren", "skid"]:
+				if key in ["engine", "siren", "skid", "heli"]:
 					_make_loop(s)
 				return s
 	return null
@@ -1329,6 +1414,7 @@ func _build_sounds() -> void:
 	sfx["siren"] = _synth_siren()
 	sfx["engine"] = _synth_engine()
 	sfx["skid"] = _synth_skid()
+	sfx["heli"] = _synth_heli()
 	sfx["reload"] = _synth_click(2)
 	sfx["radio"] = _synth_radio()
 	for k in sfx.keys():
@@ -1343,6 +1429,10 @@ func _build_sounds() -> void:
 	skid_snd.stream = sfx["skid"]
 	skid_snd.volume_db = -12.0
 	add_child(skid_snd)
+	heli_snd = AudioStreamPlayer.new()
+	heli_snd.stream = sfx["heli"]
+	heli_snd.volume_db = -80.0
+	add_child(heli_snd)
 
 
 func _sfx3d(key: String, pos: Vector3, vol_db: float = 0.0, pitch: float = 1.0, maxd: float = 140.0) -> void:
@@ -1800,15 +1890,15 @@ func _fix_hold_scale() -> void:
 func _update_player_ik(delta: float) -> void:
 	if player_ik == null:
 		return
-	var armed := aim_t > 0.0 and cur_weapon > 0 and not in_car and not dead and not phone_open
-	var phone_hold := phone_open and not in_car and not dead
+	var armed := aim_t > 0.0 and cur_weapon > 0 and not in_car and not in_heli and not dead and not phone_open
+	var phone_hold := phone_open and not in_car and not in_heli and not dead
 	var yaw := model.rotation.y
 	player_ik.fwd = Vector3(-sin(yaw), 0.0, -cos(yaw))
 	player_ik.side = Vector3(cos(yaw), 0.0, -sin(yaw))
 	var fl := _flags("player", a_cur)
 	var arms_ok: bool = fl[0]
 	var legs_ok: bool = fl[1]
-	var moving := speed > 0.5 and not in_car and not dead
+	var moving := speed > 0.5 and not in_car and not in_heli and not dead
 	player_ik.swing = clampf(speed / MAX_SPEED, 0.12, 1.0)
 	if anim_player != null and a_cur != "" and legs_ok and anim_player.is_playing():
 		var ln := anim_player.current_animation_length
@@ -1835,7 +1925,7 @@ func _update_player_ik(delta: float) -> void:
 		if not raising and not has_anim:
 			player_ik.rmode = 3
 			tr = 1.0
-	elif not arms_ok and not in_car and not dead:
+	elif not arms_ok and not in_car and not in_heli and not dead:
 		if moving:
 			player_ik.rmode = 4
 			player_ik.lmode = 4
@@ -2023,6 +2113,139 @@ func _make_cop() -> Cop:
 		c.siren.volume_db = -4.0
 		c.add_child(c.siren)
 	return c
+
+
+# ---------------------------------------------------------------- helicopter
+
+func _build_heli() -> void:
+	heli = CharacterBody3D.new()
+	var col := CollisionShape3D.new()
+	var bx := BoxShape3D.new()
+	bx.size = Vector3(2.6, 2.4, 6.0)
+	col.shape = bx
+	col.position = Vector3(0, 1.2, 0.8)
+	heli.add_child(col)
+	heli_vis = Node3D.new()
+	heli.add_child(heli_vis)
+
+	var paint := _mat(Color(0.12, 0.22, 0.6))
+	paint.metallic = 0.5
+	paint.roughness = 0.35
+	var glass := _mat(Color(0.55, 0.78, 0.95, 0.55))
+	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glass.metallic = 0.6
+	glass.roughness = 0.1
+	var dark := _mat(Color(0.06, 0.06, 0.07))
+	var white := _mat(Color(0.92, 0.92, 0.95))
+
+	var body := _part(heli_vis, _spherem(1.25), Vector3(0, 1.55, 0.0), paint)
+	body.scale = Vector3(1.0, 0.95, 1.55)
+	var cock := _part(heli_vis, _spherem(1.0), Vector3(0, 1.7, -1.15), glass)
+	cock.scale = Vector3(0.95, 0.8, 1.0)
+	_part(heli_vis, _boxm(Vector3(0.4, 0.4, 3.8)), Vector3(0, 1.9, 3.0), paint)
+	_part(heli_vis, _boxm(Vector3(0.1, 1.2, 0.7)), Vector3(0, 2.45, 4.7), white)
+
+	heli_tail = Node3D.new()
+	heli_tail.position = Vector3(0.22, 2.5, 4.7)
+	heli_vis.add_child(heli_tail)
+	_part(heli_tail, _boxm(Vector3(0.05, 1.4, 0.14)), Vector3.ZERO, dark)
+	_part(heli_tail, _boxm(Vector3(0.05, 0.14, 1.4)), Vector3.ZERO, dark)
+
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.12
+	cyl.bottom_radius = 0.12
+	cyl.height = 0.5
+	_part(heli_vis, cyl, Vector3(0, 2.85, 0), dark)
+	heli_rotor = Node3D.new()
+	heli_rotor.position = Vector3(0, 3.15, 0)
+	heli_vis.add_child(heli_rotor)
+	_part(heli_rotor, _boxm(Vector3(9.0, 0.06, 0.32)), Vector3.ZERO, dark)
+	_part(heli_rotor, _boxm(Vector3(0.32, 0.06, 9.0)), Vector3.ZERO, dark)
+
+	for sx in [-0.95, 0.95]:
+		_part(heli_vis, _boxm(Vector3(0.12, 0.12, 3.6)), Vector3(sx, 0.12, 0.2), dark)
+		_part(heli_vis, _boxm(Vector3(0.1, 0.9, 0.1)), Vector3(sx, 0.6, -0.6), dark)
+		_part(heli_vis, _boxm(Vector3(0.1, 0.9, 0.1)), Vector3(sx, 0.6, 1.0), dark)
+	add_child(heli)
+
+
+func spawn_heli() -> void:
+	if in_heli:
+		_toast("YOU ARE IN THE HELICOPTER")
+		return
+	if heli == null:
+		_build_heli()
+	var base := player.position
+	var f := Vector2(-sin(cam_yaw), -cos(cam_yaw))
+	var tgt := _snap_to_road(Vector2(base.x, base.z) + f * 14.0)
+	heli.position = Vector3(tgt.x, 0.1, tgt.y)
+	heli.rotation = Vector3(0, cam_yaw, 0)
+	heli.velocity = Vector3.ZERO
+	heli_speed = 0.0
+	heli_vy = 0.0
+	_toast("HELICOPTER READY", 2.5)
+
+
+func _fly(delta: float, input: Vector2, driven: bool, up: bool, down: bool) -> void:
+	var thr := -input.y if driven else 0.0
+	var yaw_in := input.x if driven else 0.0
+	heli_speed = move_toward(heli_speed, thr * HELI_SPEED, 20.0 * delta)
+	heli.rotation.y -= yaw_in * 1.5 * delta
+	var vt := 0.0
+	if driven:
+		vt = (8.0 if up else 0.0) - (8.0 if down else 0.0)
+	elif heli.position.y > 0.3:
+		vt = -7.0
+	heli_vy = move_toward(heli_vy, vt, 16.0 * delta)
+	if heli.position.y >= HELI_MAX_ALT and heli_vy > 0.0:
+		heli_vy = 0.0
+	var f := -heli.global_transform.basis.z
+	heli.velocity = f * heli_speed + Vector3(0, heli_vy, 0)
+	heli.move_and_slide()
+	if heli.position.y < 0.0:
+		heli.position.y = 0.0
+		heli_vy = maxf(heli_vy, 0.0)
+	heli_speed = heli.velocity.dot(f)
+
+	var k := 1.0 - exp(-6.0 * delta)
+	heli_vis.rotation.x = lerpf(heli_vis.rotation.x, -thr * 0.12, k)
+	heli_vis.rotation.z = lerpf(heli_vis.rotation.z, -yaw_in * 0.2, k)
+
+	var want_rpm := 30.0 if (driven or heli.position.y > 0.5) else 0.0
+	rotor_rpm = move_toward(rotor_rpm, want_rpm, 12.0 * delta)
+	heli_rotor.rotation.y += rotor_rpm * delta
+	heli_tail.rotation.x += rotor_rpm * 1.5 * delta
+
+	if rotor_rpm > 3.0:
+		if not heli_snd.playing:
+			heli_snd.play()
+		heli_snd.pitch_scale = 0.7 + rotor_rpm / 30.0 * 0.5
+		var near_d := player.position.distance_to(heli.position)
+		heli_snd.volume_db = -8.0 if in_heli else clampf(-14.0 - near_d * 0.25, -60.0, -14.0)
+	elif heli_snd.playing:
+		heli_snd.stop()
+
+
+func _toggle_heli() -> void:
+	fire_id = -1
+	down_id = -1
+	if in_heli:
+		if heli.position.y > 3.0:
+			_toast("LAND FIRST")
+			return
+		in_heli = false
+		player.position = heli.position + heli.global_transform.basis.x * 4.0 + Vector3(0, 0.3, 0)
+		player.velocity = Vector3.ZERO
+		player.visible = true
+		player_col.set_deferred("disabled", false)
+		model.rotation.y = heli.rotation.y
+	else:
+		in_heli = true
+		player.visible = false
+		player_col.set_deferred("disabled", true)
+		cam_yaw = heli.rotation.y
+	cam_pitch = 0.25
+	_set_weapon(cur_weapon, false)
 
 
 # ---------------------------------------------------------------- peds
@@ -2589,6 +2812,7 @@ func _hurt_player(amount: float) -> void:
 		wasted_t = 3.0
 		_clear_touch_ids()
 		_set_phone(false)
+		_set_wheel(false)
 
 
 func _respawn() -> void:
@@ -2606,6 +2830,10 @@ func _respawn() -> void:
 	officers.clear()
 	if in_car:
 		in_car = false
+		player.visible = true
+		player_col.set_deferred("disabled", false)
+	if in_heli:
+		in_heli = false
 		player.visible = true
 		player_col.set_deferred("disabled", false)
 	player.position = Vector3(0, 0.1, 0)
@@ -2687,7 +2915,7 @@ func _try_fire(delta: float) -> void:
 			var n := mini(need, ammo_res[cur_weapon])
 			ammo_mag[cur_weapon] += n
 			ammo_res[cur_weapon] -= n
-	if in_car or dead or map_open or wheel_open:
+	if in_car or in_heli or dead or map_open or wheel_open:
 		fire_queued = false
 		return
 
@@ -2802,8 +3030,8 @@ func _build_ui() -> void:
 	mini_panel = Panel.new()
 	mini_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sbm := StyleBoxFlat.new()
-	sbm.bg_color = Color(0.07, 0.08, 0.1)
-	sbm.set_corner_radius_all(int(MINI_SIZE * 0.5))
+	sbm.bg_color = Color(0.97, 0.97, 0.98)
+	sbm.set_corner_radius_all(26)
 	mini_panel.add_theme_stylebox_override("panel", sbm)
 	mini_panel.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
 	layer.add_child(mini_panel)
@@ -2838,6 +3066,7 @@ func _build_ui() -> void:
 
 
 func _process(delta: float) -> void:
+	var rd := delta / maxf(Engine.time_scale, 0.05)
 	var r := _mini_rect()
 	mini_panel.position = r.position
 	mini_panel.size = r.size
@@ -2845,8 +3074,16 @@ func _process(delta: float) -> void:
 	ui.queue_redraw()
 	if map_open:
 		big.queue_redraw()
-	if wheel_open:
+
+	# عجلة الأسلحة: حركة بطيئة (slow-mo) + ظهور ناعم
+	wheel_a = move_toward(wheel_a, 1.0 if wheel_open else 0.0, rd * 5.0)
+	wheel.visible = wheel_a > 0.001
+	if wheel.visible:
 		wheel.queue_redraw()
+	var ts_target := WHEEL_SLOWMO if wheel_open else 1.0
+	Engine.time_scale = move_toward(Engine.time_scale, ts_target, rd * 3.0)
+	AudioServer.playback_speed_scale = Engine.time_scale
+
 	phone_t = move_toward(phone_t, 1.0 if phone_open else 0.0, delta * 3.6)
 	pc.visible = phone_t > 0.001
 	if pc.visible:
@@ -2884,6 +3121,15 @@ func _icon(c: Control, kind: String, p: Vector2, u: float) -> void:
 	elif kind == "jump":
 		c.draw_polyline(PackedVector2Array([p + Vector2(-0.8, 0.05) * u, p + Vector2(0, -0.6) * u, p + Vector2(0.8, 0.05) * u]), w, 5.0, true)
 		c.draw_polyline(PackedVector2Array([p + Vector2(-0.8, 0.65) * u, p + Vector2(0, 0.0) * u, p + Vector2(0.8, 0.65) * u]), w, 5.0, true)
+	elif kind == "down":
+		c.draw_polyline(PackedVector2Array([p + Vector2(-0.8, -0.05) * u, p + Vector2(0, 0.6) * u, p + Vector2(0.8, -0.05) * u]), w, 5.0, true)
+		c.draw_polyline(PackedVector2Array([p + Vector2(-0.8, -0.65) * u, p + Vector2(0, 0.0) * u, p + Vector2(0.8, -0.65) * u]), w, 5.0, true)
+	elif kind == "heli":
+		c.draw_circle(p + Vector2(-0.2, 0.1) * u, u * 0.55, w)
+		c.draw_line(p + Vector2(0.2, 0.0) * u, p + Vector2(1.1, -0.2) * u, w, 3.0)
+		c.draw_line(p + Vector2(-0.9, -0.65) * u, p + Vector2(0.7, -0.65) * u, w, 3.0)
+		c.draw_line(p + Vector2(-0.2, -0.4) * u, p + Vector2(-0.2, -0.65) * u, w, 3.0)
+		c.draw_line(p + Vector2(-0.7, 0.75) * u, p + Vector2(0.4, 0.75) * u, w, 3.0)
 	elif kind == "brake":
 		c.draw_arc(p, u * 0.8, 0.0, TAU, 32, w, 3.0, true)
 		_txt(c, "P", p, int(u * 1.2), w)
@@ -2913,9 +3159,15 @@ func _btn(c: Control, center: Vector2, r: float, pressed: bool, kind: String, ca
 
 
 func _mini_rot() -> float:
-	var yaw := car.rotation.y if in_car else model.rotation.y
+	var yaw := _cur_yaw()
 	var hd := Vector2(-sin(yaw), -cos(yaw))
 	return -PI * 0.5 - hd.angle()
+
+
+func _draw_heart(c: Control, p: Vector2, u: float, col: Color) -> void:
+	c.draw_circle(p + Vector2(-0.5, -0.35) * u, u * 0.55, col)
+	c.draw_circle(p + Vector2(0.5, -0.35) * u, u * 0.55, col)
+	c.draw_colored_polygon(PackedVector2Array([p + Vector2(-1.02, -0.1) * u, p + Vector2(1.02, -0.1) * u, p + Vector2(0, 1.0) * u]), col)
 
 
 func _draw_ui() -> void:
@@ -2930,41 +3182,51 @@ func _draw_ui() -> void:
 		ui.draw_circle(kp, 46.0, Color(1, 1, 1, 0.4))
 		ui.draw_arc(kp, 46.0, 0.0, TAU, 32, Color(1, 1, 1, 0.9), 3.0, true)
 
-	_btn(ui, _jump_center(), 70.0, jump_id != -1, "brake" if in_car else "jump", "BRAKE" if in_car else "JUMP")
-	if in_car or near_car:
-		_btn(ui, _act_center(), 70.0, false, "car", "EXIT" if in_car else "ENTER")
-	if not in_car:
+	var up_kind := "jump"
+	var up_cap := "JUMP"
+	if in_car:
+		up_kind = "brake"
+		up_cap = "BRAKE"
+	elif in_heli:
+		up_cap = "UP"
+	_btn(ui, _jump_center(), 70.0, jump_id != -1, up_kind, up_cap)
+
+	var use_heli := in_heli or (near_heli and not in_car and not near_car)
+	if in_car or near_car or in_heli or near_heli:
+		_btn(ui, _act_center(), 70.0, false, "heli" if use_heli else "car", "EXIT" if (in_car or in_heli) else "ENTER")
+	if in_heli:
+		_btn(ui, _fire_center(), 90.0, down_id != -1, "down", "DOWN")
+	elif not in_car:
 		_btn(ui, _fire_center(), 90.0, fire_id != -1, "punch" if cur_weapon == 0 else "fire", "")
 		_btn(ui, _wpn_center(), 62.0, false, "guns", "")
 	_btn(ui, _phone_btn_center(), 52.0, phone_open, "phone", "")
 
 	if in_car:
 		_draw_gauge()
+	if in_heli:
+		_txt(ui, "ALT %d m" % int(heli.position.y), Vector2(s.x * 0.5, s.y - 150.0), 44)
+		_txt(ui, "%d KM/H" % int(absf(heli_speed) * 3.6), Vector2(s.x * 0.5, s.y - 100.0), 28, Color(1, 1, 1, 0.75))
 
 	var mr := _mini_rect()
-	var mc := mr.position + mr.size * 0.5
-	var mrad := mr.size.x * 0.5
-	ui.draw_arc(mc, mrad, 0.0, TAU, 80, Color(1, 1, 1, 0.92), 5.0, true)
-	var rot := _mini_rot()
-	var np := mc + Vector2(0, -1).rotated(rot) * (mrad - 22.0)
-	ui.draw_circle(np, 16.0, Color(0.05, 0.06, 0.08, 0.9))
-	_txt(ui, "N", np, 20)
-	var ec := mc + Vector2(0.7071, 0.7071) * mrad
-	ui.draw_circle(ec, 24.0, Color(0.05, 0.06, 0.08, 0.95))
-	ui.draw_arc(ec, 24.0, 0.0, TAU, 24, Color(1, 1, 1, 0.9), 2.5, true)
-	ui.draw_line(ec + Vector2(-9, 0), ec + Vector2(9, 0), Color.WHITE, 3.0)
-	ui.draw_line(ec + Vector2(0, -9), ec + Vector2(0, 9), Color.WHITE, 3.0)
+	# ظل الخريطة (المستطيل نفسه يُرسم داخل _draw_mini)
+	ui.draw_style_box(sb_mini_shadow, Rect2(mr.position + Vector2(0, 6), mr.size))
 
-	var hb := Rect2(mr.position.x, mr.end.y + 18.0, mr.size.x, 22.0)
-	ui.draw_rect(hb, Color(0.03, 0.03, 0.05, 0.75))
+	# ---- شريط الدم (أحمر) ----
+	var hb := Rect2(mr.position.x, mr.end.y + 16.0, mr.size.x, 30.0)
+	ui.draw_style_box(sb_hp_bg, hb)
 	var hf := clampf(hp / 100.0, 0.0, 1.0)
-	var hcol := Color(0.9, 0.12, 0.18).lerp(Color(1.0, 0.3, 0.3), hf)
-	ui.draw_rect(Rect2(hb.position + Vector2(3, 3), Vector2((hb.size.x - 6.0) * hf, hb.size.y - 6.0)), hcol)
-	ui.draw_rect(hb, Color(1, 1, 1, 0.9), false, 2.0)
-	_txt(ui, "%d" % int(hp), hb.position + hb.size * 0.5, 16)
+	if hf > 0.0:
+		var low := hf < 0.3 and (int(time * 4.0) % 2 == 0)
+		sb_hp_fill.bg_color = Color(1.0, 0.22, 0.22) if low else Color(0.88, 0.08, 0.1)
+		var fw := maxf((hb.size.x - 8.0) * hf, 22.0)
+		ui.draw_style_box(sb_hp_fill, Rect2(hb.position + Vector2(4, 4), Vector2(fw, hb.size.y - 8.0)))
+		if fw > 30.0:
+			ui.draw_style_box(sb_hp_shine, Rect2(hb.position + Vector2(10, 7), Vector2(fw - 12.0, 6)))
+	_draw_heart(ui, hb.position + Vector2(24, 15), 7.0, Color(1, 1, 1, 0.95))
+	_txt(ui, "%d" % int(hp), hb.position + hb.size * 0.5 + Vector2(10, 0), 17)
 
 	var w: Dictionary = WEAPONS[cur_weapon]
-	var pill := Rect2(mr.position.x, mr.end.y + 52.0, mr.size.x, 46.0)
+	var pill := Rect2(mr.position.x, mr.end.y + 58.0, mr.size.x, 46.0)
 	ui.draw_style_box(sb_pill, pill)
 	ui.draw_string(ThemeDB.fallback_font, pill.position + Vector2(18, 32), String(w["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color.WHITE)
 	if cur_weapon > 0:
@@ -2984,7 +3246,7 @@ func _draw_ui() -> void:
 			cl.append(pts[0])
 			ui.draw_polyline(cl, Color(1, 1, 1, 0.4), 3.0, true)
 
-	if cur_weapon > 0 and not in_car and not dead and aim_blend > 0.2:
+	if cur_weapon > 0 and not in_car and not in_heli and not dead and aim_blend > 0.2:
 		var cc := s * 0.5
 		var ca := Color(1, 1, 1, 0.9 * aim_blend)
 		ui.draw_circle(cc, 3.0, ca)
@@ -2994,7 +3256,7 @@ func _draw_ui() -> void:
 		ui.draw_line(cc + Vector2(0, 24), cc + Vector2(0, 9), ca, 3.0)
 
 	if dest_set:
-		_txt(ui, "%d m" % int(_route_len()), Vector2(mr.position.x + mr.size.x * 0.5, mr.end.y + 128.0), 30, Color(0.85, 0.5, 1.0))
+		_txt(ui, "%d m" % int(_route_len()), Vector2(mr.position.x + mr.size.x * 0.5, mr.end.y + 130.0), 30, Color(0.85, 0.5, 1.0))
 	if arrived_t > 0.0:
 		_txt(ui, "ARRIVED", Vector2(s.x * 0.5, 150.0), 60, Color(1, 1, 1))
 	if toast_t > 0.0:
@@ -3015,40 +3277,63 @@ func _draw_phone() -> void:
 	if r.position.y > vs.y:
 		return
 	pc.draw_set_transform(r.position, 0.0, Vector2(phone_scale, phone_scale))
+	# جسم الهاتف + الشاشة (الخلفية تملأ الشاشة كاملة)
 	pc.draw_style_box(sb_body, Rect2(0, 0, 440, 900))
-	pc.draw_style_box(sb_screen, Rect2(20, 20, 400, 860))
+	pc.draw_rect(Rect2(20, 20, 400, 860), Color(0, 0, 0))
 	if apps != null:
 		apps.draw_bg(pc)
-	pc.draw_style_box(sb_notch, Rect2(165, 30, 110, 26))
-	var t := Time.get_time_dict_from_system()
-	pc.draw_string(ThemeDB.fallback_font, Vector2(52, 90), "%02d:%02d" % [t["hour"], t["minute"]], HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color.WHITE)
-	pc.draw_string(ThemeDB.fallback_font, Vector2(290, 90), "5G", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color(1, 1, 1, 0.8))
-	pc.draw_rect(Rect2(342, 70, 40, 20), Color(1, 1, 1, 0.9), false, 2.0)
-	pc.draw_rect(Rect2(345, 73, 28, 14), Color(0.4, 0.9, 0.5))
-	if apps != null:
 		if apps.app_open():
 			apps.draw(pc)
 		else:
 			apps.draw_home(pc)
-	var hc := Vector2(220, 845)
-	pc.draw_circle(hc, 30.0, Color(1, 1, 1, 0.2))
-	pc.draw_arc(hc, 30.0, 0.0, TAU, 28, Color(1, 1, 1, 0.85), 3.0, true)
+	# حواف سوداء مدورة تقص أركان الشاشة + إطار فضي رفيع
+	pc.draw_style_box(sb_bezel, Rect2(0, 0, 440, 900))
+	pc.draw_style_box(sb_frame, Rect2(0, 0, 440, 900))
+	# الجزيرة (Dynamic Island) والكاميرا
+	pc.draw_style_box(sb_notch, Rect2(160, 32, 120, 34))
+	pc.draw_circle(Vector2(256, 49), 6.0, Color(0.08, 0.1, 0.18))
+	# شريط الحالة
+	var t := Time.get_time_dict_from_system()
+	pc.draw_string(ThemeDB.fallback_font, Vector2(56, 57), "%02d:%02d" % [t["hour"], t["minute"]], HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color.WHITE)
+	for i in 4:
+		var bh := 6.0 + float(i) * 4.0
+		pc.draw_rect(Rect2(298.0 + float(i) * 8.0, 56.0 - bh, 5.0, bh), Color(1, 1, 1, 0.95))
+	pc.draw_string(ThemeDB.fallback_font, Vector2(336, 57), "5G", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(1, 1, 1, 0.85))
+	pc.draw_rect(Rect2(366, 40, 34, 17), Color(1, 1, 1, 0.9), false, 2.0)
+	pc.draw_rect(Rect2(369, 43, 28, 11), Color(0.4, 0.9, 0.5))
+	pc.draw_rect(Rect2(401, 45, 3, 7), Color(1, 1, 1, 0.9))
+	# شريط الرجوع للشاشة الرئيسية (بدل الزر الدائري)
+	pc.draw_style_box(sb_homebar, Rect2(150, 854, 140, 6))
 	pc.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_wheel() -> void:
 	var s := _vp()
-	wheel.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.65))
+	var a := wheel_a * wheel_a * (3.0 - 2.0 * wheel_a)
+	var ctr := s * 0.5
+	var tt := float(Time.get_ticks_msec()) / 1000.0
+	# خلفية زرقاء خفيفة (تأثير الحركة البطيئة) — تقدر تشوف اللعبة وتمشي
+	wheel.draw_rect(Rect2(Vector2.ZERO, s), Color(0.02, 0.06, 0.16, 0.42 * a))
+	wheel.draw_arc(ctr, 250.0 * a, 0.0, TAU, 72, Color(1, 1, 1, 0.16 * a), 2.0, true)
 	for i in WEAPONS.size():
-		var pos := _wheel_pos(i)
+		var pos := ctr + (_wheel_pos(i) - ctr) * a
 		var sel := i == cur_weapon
-		wheel.draw_circle(pos, 92.0, Color(1, 1, 1, 0.3) if sel else Color(0.14, 0.16, 0.2, 0.9))
-		wheel.draw_arc(pos, 92.0, 0.0, TAU, 40, Color(1, 1, 1, 0.9 if sel else 0.35), 4.0, true)
+		var rr := 84.0 * lerpf(0.5, 1.0, a)
+		if sel:
+			var pulse := 6.0 * (0.5 + 0.5 * sin(tt * 5.0))
+			wheel.draw_circle(pos, rr + 10.0 + pulse, Color(0.3, 0.6, 1.0, 0.25 * a))
+		wheel.draw_circle(pos + Vector2(0, 4), rr, Color(0, 0, 0, 0.35 * a))
+		wheel.draw_circle(pos, rr, Color(0.22, 0.5, 0.95, 0.92 * a) if sel else Color(0.1, 0.13, 0.2, 0.9 * a))
+		wheel.draw_arc(pos, rr, 0.0, TAU, 40, Color(1, 1, 1, (0.95 if sel else 0.4) * a), 4.0, true)
 		var w: Dictionary = WEAPONS[i]
-		_txt(wheel, String(w["name"]), pos + Vector2(0, -12), 26)
+		_icon(wheel, "punch" if i == 0 else "guns", pos + Vector2(0, -30) * a, 20.0 * a)
+		_txt(wheel, String(w["name"]), pos + Vector2(0, 20) * a, int(24.0 * a) + 1)
 		if i > 0:
-			_txt(wheel, "%d / %d" % [ammo_mag[i], ammo_res[i]], pos + Vector2(0, 26), 22, Color(1, 1, 1, 0.75))
-	_txt(wheel, "WEAPONS", s * 0.5, 40)
+			_txt(wheel, "%d / %d" % [ammo_mag[i], ammo_res[i]], pos + Vector2(0, 48) * a, int(19.0 * a) + 1, Color(1, 1, 1, 0.8))
+	wheel.draw_circle(ctr, 70.0 * a, Color(0.05, 0.07, 0.12, 0.85 * a))
+	wheel.draw_arc(ctr, 70.0 * a, 0.0, TAU, 40, Color(1, 1, 1, 0.6 * a), 3.0, true)
+	_txt(wheel, "WEAPONS", ctr + Vector2(0, -8), int(24.0 * a) + 1)
+	_txt(wheel, "TAP TO CLOSE", ctr + Vector2(0, 18), int(14.0 * a) + 1, Color(1, 1, 1, 0.6))
 
 
 func _draw_gauge() -> void:
@@ -3123,12 +3408,12 @@ func _draw_map_content(c: Control, o: Vector2, wo: Vector2, sc: float, k: float,
 	for r in block_rects:
 		if cull > 0.0 and (r.get_center() - pc2).length() > cull:
 			continue
-		_wrect(c, r, o, wo, sc, rot, Color(0.17, 0.19, 0.23))
+		_wrect(c, r, o, wo, sc, rot, Color(0.85, 0.86, 0.89))
 	for r in bld_rects:
 		if cull > 0.0 and (r.get_center() - pc2).length() > cull:
 			continue
-		_wrect(c, r, o, wo, sc, rot, Color(0.31, 0.34, 0.41))
-	var lc := Color(0.6, 0.55, 0.2, 0.45)
+		_wrect(c, r, o, wo, sc, rot, Color(0.7, 0.72, 0.79))
+	var lc := Color(0.9, 0.74, 0.25, 0.7)
 	for i in range(-3, 4):
 		var a := float(i) * BLOCK
 		c.draw_line(_mp(Vector2(a, -ROAD_MAX), o, wo, sc, rot), _mp(Vector2(a, ROAD_MAX), o, wo, sc, rot), lc, 1.5 * k)
@@ -3138,11 +3423,11 @@ func _draw_map_content(c: Control, o: Vector2, wo: Vector2, sc: float, k: float,
 		var pts := PackedVector2Array()
 		for v in route:
 			pts.append(_mp(v, o, wo, sc, rot))
-		c.draw_polyline(pts, Color(0.78, 0.35, 1.0), 5.0 * k, true)
+		c.draw_polyline(pts, Color(0.62, 0.2, 0.9), 5.0 * k, true)
 
 	if dest_set:
 		var dp := _clamp_blip(_mp(dest, o, wo, sc, rot), o, circle_r, bounds)
-		c.draw_circle(dp, 11.0 * k, Color(0.78, 0.35, 1.0))
+		c.draw_circle(dp, 11.0 * k, Color(0.62, 0.2, 0.9))
 		c.draw_circle(dp, 4.5 * k, Color.WHITE)
 
 	var flash := int(time * 4.0) % 2 == 0
@@ -3158,12 +3443,16 @@ func _draw_map_content(c: Control, o: Vector2, wo: Vector2, sc: float, k: float,
 
 	if not in_car:
 		var cp := _clamp_blip(_mp(Vector2(car.position.x, car.position.z), o, wo, sc, rot), o, circle_r, bounds)
-		c.draw_rect(Rect2(cp - Vector2(6, 6) * k, Vector2(12, 12) * k), Color.WHITE)
+		c.draw_rect(Rect2(cp - Vector2(6, 6) * k, Vector2(12, 12) * k), Color(0.1, 0.12, 0.18))
 		c.draw_rect(Rect2(cp - Vector2(4, 4) * k, Vector2(8, 8) * k), Color(0.3, 0.7, 1.0))
+	if heli != null and not in_heli:
+		var hpp := _clamp_blip(_mp(Vector2(heli.position.x, heli.position.z), o, wo, sc, rot), o, circle_r, bounds)
+		c.draw_rect(Rect2(hpp - Vector2(6, 6) * k, Vector2(12, 12) * k), Color(0.1, 0.12, 0.18))
+		c.draw_rect(Rect2(hpp - Vector2(4, 4) * k, Vector2(8, 8) * k), Color(1.0, 0.6, 0.15))
 
 	var p3 := car.position if in_car else player.position
 	var pp := _mp(Vector2(p3.x, p3.z), o, wo, sc, rot)
-	var yaw := car.rotation.y if in_car else model.rotation.y
+	var yaw := _cur_yaw()
 	var d := Vector2(-sin(yaw), -cos(yaw)).rotated(rot)
 	var perp := Vector2(-d.y, d.x)
 	var tri_o := PackedVector2Array([
@@ -3177,7 +3466,7 @@ func _draw_map_content(c: Control, o: Vector2, wo: Vector2, sc: float, k: float,
 		pp - d * 9.0 * k + perp * 9.5 * k,
 		pp - d * 9.0 * k - perp * 9.5 * k
 	])
-	c.draw_colored_polygon(tri, Color.WHITE)
+	c.draw_colored_polygon(tri, Color(0.1, 0.45, 1.0))
 
 
 func _draw_mini() -> void:
@@ -3186,8 +3475,23 @@ func _draw_mini() -> void:
 	var p3 := car.position if in_car else player.position
 	var ppos := Vector2(p3.x, p3.z)
 	var sc := sz.x / MINI_VIEW
-	mini.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.07, 0.08, 0.1))
-	_draw_map_content(mini, ctr, -ppos, sc, 1.0, _mini_rot(), sz.x * 0.5 - 16.0, Rect2(Vector2.ZERO, sz), MINI_VIEW * 0.5 + 40.0)
+	var rot := _mini_rot()
+	mini.draw_rect(Rect2(Vector2.ZERO, sz), Color(0.97, 0.97, 0.98))
+	_draw_map_content(mini, ctr, -ppos, sc, 1.0, rot, -1.0, Rect2(Vector2.ZERO, sz), sz.length() / sc * 0.5 + 30.0)
+	# إطار الخريطة
+	mini.draw_style_box(sb_mini, Rect2(Vector2.ZERO, sz))
+	# بوصلة صغيرة (السهم الأحمر = الشمال)
+	var cc := Vector2(34, 34)
+	mini.draw_circle(cc, 22.0, Color(1, 1, 1, 0.95))
+	mini.draw_arc(cc, 22.0, 0.0, TAU, 24, Color(0.16, 0.18, 0.24), 2.5, true)
+	var nd := Vector2(0, -1).rotated(rot)
+	var nperp := Vector2(-nd.y, nd.x)
+	mini.draw_colored_polygon(PackedVector2Array([cc + nd * 15.0, cc - nd * 8.0 + nperp * 8.0, cc - nd * 8.0 - nperp * 8.0]), Color(0.9, 0.15, 0.15))
+	# زر + (اضغط على الخريطة لفتحها)
+	var ec := sz - Vector2(30, 30)
+	mini.draw_circle(ec, 17.0, Color(0.16, 0.18, 0.24, 0.92))
+	mini.draw_line(ec + Vector2(-7, 0), ec + Vector2(7, 0), Color.WHITE, 3.0)
+	mini.draw_line(ec + Vector2(0, -7), ec + Vector2(0, 7), Color.WHITE, 3.0)
 
 
 func _draw_big() -> void:
@@ -3196,7 +3500,7 @@ func _draw_big() -> void:
 	var sc := br.size.x / (MAP_HALF * 2.0)
 	big.draw_rect(Rect2(Vector2.ZERO, s), Color(0, 0, 0, 0.82))
 	big.draw_style_box(sb_map, br.grow(10.0))
-	big.draw_rect(br, Color(0.07, 0.08, 0.1))
+	big.draw_rect(br, Color(0.97, 0.97, 0.98))
 	_draw_map_content(big, br.position, Vector2(MAP_HALF, MAP_HALF), sc, 1.7, 0.0, -1.0, br, -1.0)
 
 	var cr := _close_rect()
@@ -3221,6 +3525,7 @@ func _clear_touch_ids() -> void:
 	look_id = -1
 	jump_id = -1
 	fire_id = -1
+	down_id = -1
 
 
 func _set_map(open: bool) -> void:
@@ -3231,10 +3536,10 @@ func _set_map(open: bool) -> void:
 
 
 func _set_wheel(open: bool) -> void:
+	if open == wheel_open:
+		return
 	wheel_open = open
-	wheel.visible = open
-	if open:
-		_clear_touch_ids()
+	# ما نمسح اللمسات: تقدر تمشي وتتحرك وانت تختار السلاح (الحركة بطيئة)
 
 
 func _set_phone(open: bool) -> void:
@@ -3246,7 +3551,7 @@ func _set_phone(open: bool) -> void:
 		aim_t = 0.0
 		phone_raise_t = 0.0
 		var rn := _wa(9, "raise")
-		if rn != "" and anim_player != null and not in_car:
+		if rn != "" and anim_player != null and not in_car and not in_heli:
 			phone_raise_t = clampf(anim_player.get_animation(rn).length, 0.3, 2.5)
 
 
@@ -3290,6 +3595,9 @@ func _phone_app(i: int) -> void:
 			car.velocity = Vector3.ZERO
 			car_speed = 0.0
 			player.position = np
+		elif in_heli:
+			heli.position = Vector3(np.x, 12.0, np.z)
+			player.position = heli.position
 		else:
 			player.position = np
 			player.velocity = Vector3.ZERO
@@ -3379,11 +3687,14 @@ func _input(event: InputEvent) -> void:
 				return
 			if wheel_open:
 				for i in WEAPONS.size():
-					if p.distance_to(_wheel_pos(i)) < 92.0:
+					if p.distance_to(_wheel_pos(i)) < 90.0:
 						_set_weapon(i)
-						break
-				_set_wheel(false)
-				return
+						_set_wheel(false)
+						return
+				if p.distance_to(_vp() * 0.5) < 80.0:
+					_set_wheel(false)
+					return
+				# باقي اللمسات تكمل عادي (تمشي وانت تختار)
 			if phone_t > 0.35 and _prect().has_point(p):
 				_phone_touch(p)
 				return
@@ -3395,10 +3706,20 @@ func _input(event: InputEvent) -> void:
 			if p.distance_to(_phone_btn_center()) < 70.0:
 				_set_phone(not phone_open)
 				return
-			if (in_car or near_car) and p.distance_to(_act_center()) < 95.0:
-				_toggle_car()
+			if (in_car or near_car or in_heli or near_heli) and p.distance_to(_act_center()) < 95.0:
+				var use_heli := in_heli
+				if not use_heli and near_heli and not in_car:
+					use_heli = (not near_car) or (player.position.distance_to(heli.position) < player.position.distance_to(car.position))
+				if use_heli:
+					_toggle_heli()
+				else:
+					_toggle_car()
 				return
-			if not in_car:
+			if in_heli:
+				if p.distance_to(_fire_center()) < 115.0:
+					down_id = event.index
+					return
+			elif not in_car:
 				if p.distance_to(_fire_center()) < 115.0:
 					if phone_open:
 						_set_phone(false)
@@ -3410,7 +3731,7 @@ func _input(event: InputEvent) -> void:
 					return
 			if p.distance_to(_jump_center()) < 100.0:
 				jump_id = event.index
-				if not in_car:
+				if not in_car and not in_heli:
 					want_jump = true
 				return
 			if p.x < half and stick_id == -1:
@@ -3429,14 +3750,16 @@ func _input(event: InputEvent) -> void:
 				jump_id = -1
 			elif event.index == fire_id:
 				fire_id = -1
+			elif event.index == down_id:
+				down_id = -1
 	elif event is InputEventScreenDrag:
-		if map_open or wheel_open:
+		if map_open:
 			return
 		if event.index == stick_id:
 			stick_vec = (event.position - stick_origin).limit_length(RADIUS) / RADIUS
 		elif event.index == look_id:
 			cam_yaw -= event.relative.x * 0.005
-			if aim_t > 0.0 and cur_weapon > 0 and not in_car:
+			if aim_t > 0.0 and cur_weapon > 0 and not in_car and not in_heli:
 				aim_pitch = clampf(aim_pitch + event.relative.y * 0.004, -0.2, 0.7)
 			else:
 				cam_pitch = clampf(cam_pitch + event.relative.y * 0.004, -0.1, 0.8)
@@ -3455,7 +3778,7 @@ func _physics_process(delta: float) -> void:
 	recoil = move_toward(recoil, 0.0, 0.6 * delta)
 	police_called = maxf(police_called - delta, 0.0)
 
-	var armed_now := aim_t > 0.0 and cur_weapon > 0 and not in_car and not phone_open
+	var armed_now := aim_t > 0.0 and cur_weapon > 0 and not in_car and not in_heli and not phone_open
 	if armed_now and not prev_armed:
 		raise_t = 0.5
 		a_cur = ""
@@ -3467,23 +3790,32 @@ func _physics_process(delta: float) -> void:
 	if dead:
 		input = Vector2.ZERO
 
-	near_car = (not in_car) and (not dead) and player.position.distance_to(car.position) < 6.0
+	near_car = (not in_car) and (not in_heli) and (not dead) and player.position.distance_to(car.position) < 6.0
+	near_heli = heli != null and (not in_heli) and (not in_car) and (not dead) and player.position.distance_to(heli.position) < 7.0
 
-	if not in_car and look_id == -1 and not armed_now and not dead:
+	if not in_car and not in_heli and look_id == -1 and not armed_now and not dead:
 		cam_yaw -= input.x * 1.3 * clampf(-input.y, 0.0, 1.0) * delta
 
-	if in_car:
+	if in_heli:
+		_fly(delta, input, not dead, jump_id != -1, down_id != -1)
+		player.position = heli.position
+		_drive(delta, Vector2.ZERO, false, true)
+	elif in_car:
 		_drive(delta, input, not dead, jump_id != -1)
 		player.position = car.position
+		if heli != null:
+			_fly(delta, Vector2.ZERO, false, false, false)
 	else:
 		_drive(delta, Vector2.ZERO, false, true)
 		_walk(delta, input)
+		if heli != null:
+			_fly(delta, Vector2.ZERO, false, false, false)
 
 	_update_player_ik(delta)
 	_actors(delta)
 	_fix_hold_scale()
-	gun_node.visible = cur_weapon > 0 and not in_car and aim_t > 0.0 and not phone_open
-	phone_node.visible = phone_open and not in_car and phone_t > 0.3
+	gun_node.visible = cur_weapon > 0 and not in_car and not in_heli and aim_t > 0.0 and not phone_open
+	phone_node.visible = phone_open and not in_car and not in_heli and phone_t > 0.3
 
 	_try_fire(delta)
 	_update_peds(delta)
@@ -3609,8 +3941,12 @@ func _drive(delta: float, input: Vector2, driven: bool, handbrake: bool) -> void
 func _update_camera(delta: float) -> void:
 	var cratio := clampf(absf(car_speed) / CAR_MAX, 0.0, 1.0)
 	var run_f := clampf(speed / MAX_SPEED, 0.0, 1.0)
-	var base := car.position if in_car else player.position
-	var aiming := aim_t > 0.0 and cur_weapon > 0 and not in_car and not dead and not phone_open
+	var base := player.position
+	if in_car:
+		base = car.position
+	elif in_heli:
+		base = heli.position
+	var aiming := aim_t > 0.0 and cur_weapon > 0 and not in_car and not in_heli and not dead and not phone_open
 	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, 4.0 * delta)
 
 	var dist := 3.6
@@ -3618,7 +3954,14 @@ func _update_camera(delta: float) -> void:
 	var shoulder := 0.55
 	var follow := 14.0
 	var pitch := cam_pitch
-	if in_car:
+	if in_heli:
+		dist = 15.0 + clampf(absf(heli_speed) / HELI_SPEED, 0.0, 1.0) * 4.0
+		h = 4.0
+		shoulder = 0.0
+		follow = 10.0
+		if look_id == -1:
+			cam_yaw = lerp_angle(cam_yaw, heli.rotation.y, 1.0 - exp(-2.0 * delta))
+	elif in_car:
 		dist = 7.5 + cratio * 2.5
 		h = 1.9
 		shoulder = 0.0
@@ -3639,7 +3982,10 @@ func _update_camera(delta: float) -> void:
 	var desired := tgt + off
 
 	var q := PhysicsRayQueryParameters3D.create(tgt, desired, 1)
-	q.exclude = [player.get_rid(), car.get_rid()]
+	var ex: Array[RID] = [player.get_rid(), car.get_rid()]
+	if heli != null:
+		ex.append(heli.get_rid())
+	q.exclude = ex
 	var hit := get_world_3d().direct_space_state.intersect_ray(q)
 	var kf := follow
 	if not hit.is_empty():
@@ -3651,6 +3997,8 @@ func _update_camera(delta: float) -> void:
 	var fov_t := 68.0 + run_f * 10.0 - 14.0 * aim_blend
 	if in_car:
 		fov_t = 66.0 + cratio * 26.0
+	elif in_heli:
+		fov_t = 70.0 + clampf(absf(heli_speed) / HELI_SPEED, 0.0, 1.0) * 14.0
 	cam.fov = lerpf(cam.fov, fov_t, 1.0 - exp(-4.0 * delta))
 
 
@@ -3711,7 +4059,7 @@ func _animate(delta: float, on_floor: bool) -> void:
 
 func _animate_glb(on_floor: bool) -> void:
 	var w := cur_weapon
-	var holding_phone := phone_open and not in_car
+	var holding_phone := phone_open and not in_car and not in_heli
 	var armed := aim_t > 0.0 and w > 0 and not phone_open
 	var run := speed > RUN_SPEED
 	var walk := speed > 0.5
