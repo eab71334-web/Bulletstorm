@@ -1,5 +1,5 @@
 extends Node
-# apps.gd - phone home screen + apps (batch 3)
+# apps.gd - phone home screen + apps (batch 4)
 
 const SAVE_PATH := "user://phone.cfg"
 const PHOTO_DIR := "user://photos/"
@@ -11,6 +11,13 @@ const A_CAR_GLB := "res://game/car.glb"
 const A_CAR_YAW := PI
 const A_CAR_LEN := 5.4
 const START_MONEY := 20000
+
+# ======== الأكواد السرية (غيّرها لأي أرقام تبيها) ========
+# اكتبها في تطبيق الهاتف (الأرقام) واضغط زر الاتصال الأخضر
+const CHEAT_HELI := "*#4411#"      # يستدعي الهليكوبتر
+const CHEAT_MONEY := "*#9000#"     # فلوس لا نهائية (تشغيل / إيقاف)
+const INF_MONEY := 999999999
+
 const LANGS := ["en", "ar", "fr", "es", "tr"]
 const LANG_NAMES := ["English", "Arabic", "French", "Spanish", "Turkish"]
 const WALLS := [
@@ -52,13 +59,13 @@ const HOME_DOCK := [
 	{"app": 8, "key": "settings", "glyph": "gear", "c1": Color(0.78, 0.8, 0.85), "c2": Color(0.35, 0.37, 0.45)},
 ]
 const CONTACTS := [
-	{"name": "police", "num": "100", "kind": "police", "col": Color(0.2, 0.4, 0.95)},
-	{"name": "ambulance", "num": "101", "kind": "ambulance", "col": Color(0.9, 0.2, 0.25)},
-	{"name": "fire", "num": "102", "kind": "fire", "col": Color(0.95, 0.5, 0.15)},
-	{"name": "taxi", "num": "103", "kind": "taxi", "col": Color(0.9, 0.75, 0.15)},
-	{"name": "mechanic", "num": "104", "kind": "mechanic", "col": Color(0.5, 0.55, 0.62)},
-	{"name": "boss", "num": "555-0101", "kind": "none", "col": Color(0.55, 0.4, 0.9)},
-	{"name": "sara", "num": "555-0102", "kind": "none", "col": Color(0.9, 0.4, 0.6)},
+	{"name": "police", "num": "100", "kind": "police", "icon": "police", "col": Color(0.2, 0.4, 0.95)},
+	{"name": "ambulance", "num": "101", "kind": "ambulance", "icon": "ambulance", "col": Color(0.9, 0.2, 0.25)},
+	{"name": "fire", "num": "102", "kind": "fire", "icon": "fire", "col": Color(0.95, 0.5, 0.15)},
+	{"name": "taxi", "num": "103", "kind": "taxi", "icon": "taxi", "col": Color(0.9, 0.75, 0.15)},
+	{"name": "mechanic", "num": "104", "kind": "mechanic", "icon": "mechanic", "col": Color(0.5, 0.55, 0.62)},
+	{"name": "boss", "num": "555-0101", "kind": "none", "icon": "briefcase", "col": Color(0.55, 0.4, 0.9)},
+	{"name": "sara", "num": "555-0102", "kind": "none", "icon": "person", "col": Color(0.9, 0.4, 0.6)},
 ]
 
 const TXT := {
@@ -74,12 +81,14 @@ var app := -1
 var page := ""
 var hits: Array = []
 var sbs: Array = []
+var sq_cache := {}
 var font: Font
 var sys_font: SystemFont
 var custom_font := false
 var icon_tex := {}
 var lang := "en"
 var money := START_MONEY
+var inf_money := false
 var gain_t := 0.0
 var gain_txt := ""
 var wall_idx := 0
@@ -117,6 +126,7 @@ var call_state := ""
 var call_name := ""
 var call_num := ""
 var call_kind := ""
+var call_ic := ""
 var call_col := Color.WHITE
 var call_t := 0.0
 var call_msg := ""
@@ -289,6 +299,8 @@ func _fmt(n: int) -> String:
 
 func add_money(n: int) -> void:
 	money = maxi(money + n, 0)
+	if inf_money:
+		money = INF_MONEY
 	if n > 0:
 		gain_txt = "+" + _fmt(n)
 		gain_t = 2.0
@@ -330,11 +342,28 @@ func _set_player_layers(n: Node) -> void:
 		_set_player_layers(ch)
 
 
+# ---------------------------------------------------------------- secret codes
+
+func _cheat(code: String) -> bool:
+	if code == CHEAT_HELI:
+		g._set_phone(false)
+		g.spawn_heli()
+		return true
+	if code == CHEAT_MONEY:
+		inf_money = not inf_money
+		money = INF_MONEY if inf_money else START_MONEY
+		dirty = true
+		g._toast("UNLIMITED MONEY: ON" if inf_money else "UNLIMITED MONEY: OFF", 2.5)
+		return true
+	return false
+
+
 # ---------------------------------------------------------------- save / load
 
 func _save() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("p", "money", money)
+	cf.set_value("p", "inf", inf_money)
 	cf.set_value("p", "lang", lang)
 	cf.set_value("p", "wall_idx", wall_idx)
 	cf.set_value("p", "wall_path", wall_path)
@@ -354,6 +383,7 @@ func _load() -> void:
 	if cf.load(SAVE_PATH) != OK:
 		return
 	money = int(cf.get_value("p", "money", START_MONEY))
+	inf_money = bool(cf.get_value("p", "inf", false))
 	lang = String(cf.get_value("p", "lang", "en"))
 	wall_idx = int(cf.get_value("p", "wall_idx", 0))
 	wall_path = String(cf.get_value("p", "wall_path", ""))
@@ -403,6 +433,8 @@ func _apply_car(id: String) -> void:
 # ---------------------------------------------------------------- per-frame logic
 
 func _process(delta: float) -> void:
+	if inf_money:
+		money = INF_MONEY
 	if app != -1 and not g.phone_open:
 		close_app()
 	if gain_t > 0.0:
@@ -721,19 +753,26 @@ func _act(a: String, v) -> void:
 			dial = dial.substr(0, maxi(dial.length() - 1, 0))
 		"dial_call":
 			if dial != "":
-				_call_number(dial)
+				var code := dial
 				dial = ""
+				if _cheat(code):
+					return
+				_call_number(code)
 		"call_contact":
 			var ct: Dictionary = CONTACTS[int(v)]
-			_start_call(String(ct["name"]), String(ct["num"]), String(ct["kind"]), ct["col"])
+			_start_call(String(ct["name"]), String(ct["num"]), String(ct["kind"]), ct["col"], String(ct["icon"]))
 		"redial":
 			var r: Dictionary = recents[int(v)]
-			_start_call(String(r["n"]), String(r["num"]), String(r["k"]), r["c"])
+			_start_call(String(r["n"]), String(r["num"]), String(r["k"]), r["c"], String(r.get("ic", r["k"])))
 		"end_call":
 			_end_call()
 
 
 func _pay(price: int) -> bool:
+	if inf_money:
+		dirty = true
+		g._toast(T("bought"), 1.8)
+		return true
 	if money < price:
 		g._toast(T("nomoney"), 2.0)
 		return false
@@ -756,27 +795,79 @@ func _car_price(id: String) -> int:
 	return 0
 
 
+# ---------------------------------------------------------------- contact icons (rounded squares)
+
+func _sq(col: Color, rad: int, border: bool) -> StyleBoxFlat:
+	var key := "%s_%d_%s" % [col.to_html(true), rad, str(border)]
+	if sq_cache.has(key):
+		return sq_cache[key]
+	var s := _mk(col, Color(1, 1, 1, 0.5) if border else Color(0, 0, 0, 0), rad, 2 if border else 0)
+	sq_cache[key] = s
+	return s
+
+
+func _ci_glyph(c: Control, ic: String, p: Vector2, u: float, col: Color) -> void:
+	var w := Color(1, 1, 1, 0.97)
+	match ic:
+		"police":
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-0.8, -0.9) * u, p + Vector2(0.8, -0.9) * u, p + Vector2(0.8, 0.15) * u, p + Vector2(0, 1.0) * u, p + Vector2(-0.8, 0.15) * u]), w)
+			c.draw_circle(p + Vector2(0, -0.1) * u, u * 0.3, col.darkened(0.15))
+		"ambulance":
+			c.draw_rect(Rect2(p + Vector2(-0.3, -0.95) * u, Vector2(0.6, 1.9) * u), w)
+			c.draw_rect(Rect2(p + Vector2(-0.95, -0.3) * u, Vector2(1.9, 0.6) * u), w)
+		"fire":
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(0, -1.0) * u, p + Vector2(0.55, -0.2) * u, p + Vector2(0.8, 0.4) * u, p + Vector2(0.4, 0.95) * u, p + Vector2(-0.4, 0.95) * u, p + Vector2(-0.8, 0.4) * u, p + Vector2(-0.45, -0.1) * u, p + Vector2(-0.2, -0.4) * u]), w)
+			c.draw_circle(p + Vector2(0, 0.55) * u, u * 0.3, col.darkened(0.1))
+		"taxi":
+			_glyph(c, "taxi", p, u * 0.95)
+		"mechanic":
+			c.draw_line(p + Vector2(-0.75, 0.75) * u, p + Vector2(0.4, -0.4) * u, w, u * 0.38)
+			c.draw_circle(p + Vector2(0.5, -0.5) * u, u * 0.52, w)
+			c.draw_circle(p + Vector2(0.68, -0.68) * u, u * 0.22, col.darkened(0.2))
+		"briefcase":
+			c.draw_rect(Rect2(p + Vector2(-0.9, -0.4) * u, Vector2(1.8, 1.3) * u), w)
+			c.draw_arc(p + Vector2(0, -0.4 * u), u * 0.4, PI, TAU, 12, w, u * 0.18, true)
+			c.draw_line(p + Vector2(-0.9, 0.15) * u, p + Vector2(0.9, 0.15) * u, col.darkened(0.2), u * 0.1)
+		"unknown":
+			_t(c, "?", p, int(u * 2.2))
+		_:
+			c.draw_circle(p + Vector2(0, -0.45) * u, u * 0.45, w)
+			c.draw_arc(p + Vector2(0, 0.85 * u), u * 0.7, PI, TAU, 16, w, u * 0.55, true)
+
+
+func _contact_icon(c: Control, p: Vector2, r: float, col: Color, ic: String) -> void:
+	var rect := Rect2(p - Vector2(r, r), Vector2(r, r) * 2.0)
+	var rad := int(r * 0.42)
+	if ic == "wrong":
+		ic = "unknown"
+	c.draw_style_box(_sq(Color(0, 0, 0, 0.3), rad, false), Rect2(rect.position + Vector2(0, 3), rect.size))
+	c.draw_style_box(_sq(col.darkened(0.3), rad, true), rect)
+	c.draw_style_box(_sq(col, maxi(rad - 2, 2), false), Rect2(rect.position + Vector2(3, 3), rect.size - Vector2(6, 9)))
+	_ci_glyph(c, ic, p + Vector2(0, -1.0), r * 0.5, col)
+
+
 # ---------------------------------------------------------------- phone app (calls, contacts)
 
 func _call_number(num: String) -> void:
 	for ct in CONTACTS:
 		if String(ct["num"]) == num:
-			_start_call(String(ct["name"]), num, String(ct["kind"]), ct["col"])
+			_start_call(String(ct["name"]), num, String(ct["kind"]), ct["col"], String(ct["icon"]))
 			return
-	_start_call(num, num, "wrong", Color(0.5, 0.5, 0.58))
+	_start_call(num, num, "wrong", Color(0.5, 0.5, 0.58), "unknown")
 
 
-func _start_call(key: String, num: String, kind: String, col: Color) -> void:
+func _start_call(key: String, num: String, kind: String, col: Color, ic: String) -> void:
 	call_state = "ringing"
 	call_name = key
 	call_num = num
 	call_kind = kind
+	call_ic = ic
 	call_col = col
 	call_t = 0.0
 	call_msg = ""
 	call_player.play()
 	var t := Time.get_time_dict_from_system()
-	recents.push_front({"n": key, "num": num, "k": kind, "t": "%02d:%02d" % [t["hour"], t["minute"]], "c": col})
+	recents.push_front({"n": key, "num": num, "k": kind, "ic": ic, "t": "%02d:%02d" % [t["hour"], t["minute"]], "c": col})
 	if recents.size() > 9:
 		recents.pop_back()
 	dirty = true
@@ -861,14 +952,6 @@ func _draw_keypad(c: Control) -> void:
 		hits.append({"r": Rect2(bp - Vector2(30, 30), Vector2(60, 60)), "a": "dial_del", "v": null})
 
 
-func _avatar(c: Control, p: Vector2, r: float, col: Color, label: String) -> void:
-	c.draw_circle(p + Vector2(0, 3), r + 1.0, Color(0, 0, 0, 0.3))
-	c.draw_circle(p, r, col.darkened(0.25))
-	c.draw_circle(p + Vector2(0, -r * 0.06), r * 0.88, col)
-	c.draw_arc(p, r * 0.78, deg_to_rad(212), deg_to_rad(328), 20, Color(1, 1, 1, 0.28), r * 0.14, true)
-	_t(c, label.substr(0, 1).to_upper(), p, int(r * 0.95))
-
-
 func _draw_recents(c: Control) -> void:
 	if recents.is_empty():
 		_t(c, T("empty"), Vector2(220, 400), 22, Color(1, 1, 1, 0.7))
@@ -877,7 +960,7 @@ func _draw_recents(c: Control) -> void:
 		var rc: Dictionary = recents[i]
 		var r := Rect2(36, 176 + i * 58, 368, 52)
 		c.draw_style_box(sbs[4], r)
-		_avatar(c, r.position + Vector2(30, 26), 20.0, rc["c"], T(String(rc["n"])))
+		_contact_icon(c, r.position + Vector2(32, 26), 20.0, rc["c"], String(rc.get("ic", rc["k"])))
 		_t(c, T(String(rc["n"])), r.position + Vector2(66, 18), 18, Color.WHITE, 0)
 		_t(c, String(rc["num"]), r.position + Vector2(66, 38), 13, Color(1, 1, 1, 0.6), 0)
 		_t(c, String(rc["t"]), r.position + Vector2(356, 26), 15, Color(1, 1, 1, 0.7), 2)
@@ -889,19 +972,22 @@ func _draw_contacts(c: Control) -> void:
 		var ct: Dictionary = CONTACTS[i]
 		var r := Rect2(36, 176 + i * 76, 368, 68)
 		c.draw_style_box(sbs[4], r)
-		_avatar(c, r.position + Vector2(38, 34), 26.0, ct["col"], T(String(ct["name"])))
-		_t(c, T(String(ct["name"])), r.position + Vector2(80, 24), 20, Color.WHITE, 0)
-		_t(c, String(ct["num"]), r.position + Vector2(80, 48), 15, Color(1, 1, 1, 0.6), 0)
-		var bp := r.position + Vector2(328, 34)
-		c.draw_circle(bp, 22.0, Color(0.2, 0.75, 0.35))
-		c.draw_arc(bp, 22.0, 0.0, TAU, 24, Color(1, 1, 1, 0.7), 2.0, true)
-		_glyph(c, "phone", bp, 11.0)
+		_contact_icon(c, r.position + Vector2(40, 34), 26.0, ct["col"], String(ct["icon"]))
+		_t(c, T(String(ct["name"])), r.position + Vector2(84, 24), 20, Color.WHITE, 0)
+		_t(c, String(ct["num"]), r.position + Vector2(84, 48), 15, Color(1, 1, 1, 0.6), 0)
+		var bp := r.position + Vector2(322, 34)
+		c.draw_style_box(_sq(Color(0.2, 0.75, 0.35), 17, true), Rect2(bp - Vector2(26, 19), Vector2(52, 38)))
+		_glyph(c, "phone", bp, 10.0)
 		hits.append({"r": r, "a": "call_contact", "v": i})
 
 
 func _draw_call(c: Control) -> void:
 	var p := Vector2(220, 300)
-	_avatar(c, p, 72.0, call_col, T(call_name))
+	if call_state == "ringing":
+		for k in 2:
+			var rr := 86.0 + fmod(call_t * 40.0 + float(k) * 22.0, 44.0)
+			c.draw_arc(p, rr, 0.0, TAU, 40, Color(1, 1, 1, 0.3 - (rr - 86.0) / 44.0 * 0.3), 3.0, true)
+	_contact_icon(c, p, 72.0, call_col, call_ic)
 	_t(c, T(call_name), Vector2(220, 410), 34)
 	_t(c, call_num, Vector2(220, 452), 20, Color(1, 1, 1, 0.65))
 	if call_state == "ringing":
@@ -1407,7 +1493,7 @@ func _draw_store(c: Control) -> void:
 	_title(c, "store")
 	var mp := Rect2(292, 108, 112, 36)
 	c.draw_style_box(sbs[4], mp)
-	_t(c, _fmt(money), mp.position + mp.size * 0.5, 16, Color(1, 0.85, 0.3))
+	_t(c, _fmt(money), mp.position + mp.size * 0.5, 16 if money < 100000000 else 12, Color(1, 0.85, 0.3))
 	var keys := ["cars", "ammo", "air", "apps"]
 	c.draw_style_box(sbs[6], Rect2(36, 166, 368, 48))
 	for i in 4:
@@ -1583,7 +1669,7 @@ func _round_icon(c: Control, p: Vector2, r: float, it: Dictionary, label: String
 		c.draw_circle(p, r, Color(0, 0, 0, 0.45))
 	var h := r * 2.0 + 16.0
 	if show_label:
-		_t(c, label, p + Vector2(0, r + 17.0), 14, Color(1, 1, 1, 0.55 if dim else 0.95))
+		_t(c, label, p + Vector2(0, r + 18.0), 16, Color(1, 1, 1, 0.55 if dim else 0.95))
 		h += 20.0
 	hits.append({"r": Rect2(p - Vector2(r + 8.0, r + 8.0), Vector2(r * 2.0 + 16.0, h)), "a": "open", "v": int(it["app"])})
 
@@ -1614,7 +1700,8 @@ func draw_home(c: Control) -> void:
 
 
 func draw_bg(c: Control) -> void:
-	var r := Rect2(42, 42, 356, 816)
+	# الخلفية تملأ الشاشة كلها (الأركان المدورة تغطيها إطار الهاتف)
+	var r := Rect2(20, 20, 400, 860)
 	if wall_tex != null:
 		var ts := wall_tex.get_size()
 		var want := r.size.x / r.size.y
@@ -1646,7 +1733,8 @@ func draw(c: Control) -> void:
 
 
 func draw_hud(ui: Control) -> void:
-	_t(ui, _fmt(money), Vector2(30, 205), 30, Color(1, 0.85, 0.3), 0)
+	var mt := _fmt(money)
+	_t(ui, mt, Vector2(30, 205), 30, Color(1, 0.85, 0.3), 0)
 	if gain_t > 0.0:
 		_t(ui, gain_txt, Vector2(30, 240), 24, Color(0.5, 1, 0.5, clampf(gain_t, 0.0, 1.0)), 0)
 	if show_fps:
