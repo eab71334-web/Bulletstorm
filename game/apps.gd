@@ -43,20 +43,20 @@ const AMMO := [
 ]
 const SOON_APPS := ["Chirp (social)", "Snapgram (social)", "Mini Racer (game)", "Sky Jump (game)", "Tower Chess (game)"]
 const HOME_GRID := [
-	{"app": 0, "key": "map", "glyph": "pin", "c1": Color(0.3, 0.85, 0.5), "c2": Color(0.08, 0.5, 0.3)},
-	{"app": 1, "key": "mycar", "glyph": "car", "c1": Color(0.4, 0.62, 1.0), "c2": Color(0.15, 0.3, 0.85)},
-	{"app": 2, "key": "guns", "glyph": "gun", "c1": Color(1.0, 0.8, 0.3), "c2": Color(0.9, 0.5, 0.1)},
-	{"app": 3, "key": "taxi", "glyph": "taxi", "c1": Color(1.0, 0.7, 0.3), "c2": Color(0.9, 0.35, 0.15)},
-	{"app": 6, "key": "clk", "glyph": "clock", "c1": Color(0.5, 0.52, 0.6), "c2": Color(0.12, 0.13, 0.18)},
-	{"app": 7, "key": "store", "glyph": "bag", "c1": Color(0.7, 0.5, 1.0), "c2": Color(0.4, 0.2, 0.85)},
-	{"app": 10, "key": "chirp", "glyph": "chat", "c1": Color(0.4, 0.8, 1.0), "c2": Color(0.1, 0.5, 0.9)},
-	{"app": 11, "key": "racer", "glyph": "game", "c1": Color(1.0, 0.45, 0.45), "c2": Color(0.8, 0.15, 0.25)},
+	{"app": 0, "key": "map", "c1": Color(0.62, 0.9, 0.55), "c2": Color(0.3, 0.75, 0.4)},
+	{"app": 1, "key": "mycar", "c1": Color(0.35, 0.65, 1.0), "c2": Color(0.1, 0.35, 0.9)},
+	{"app": 2, "key": "guns", "c1": Color(1.0, 0.78, 0.25), "c2": Color(1.0, 0.5, 0.05)},
+	{"app": 3, "key": "taxi", "c1": Color(1.0, 0.82, 0.2), "c2": Color(0.95, 0.6, 0.05)},
+	{"app": 6, "key": "clk", "c1": Color(0.16, 0.16, 0.18), "c2": Color(0.0, 0.0, 0.0)},
+	{"app": 7, "key": "store", "c1": Color(0.3, 0.75, 1.0), "c2": Color(0.05, 0.4, 0.95)},
+	{"app": 10, "key": "chirp", "c1": Color(0.45, 0.85, 1.0), "c2": Color(0.1, 0.55, 0.95)},
+	{"app": 11, "key": "racer", "c1": Color(1.0, 0.4, 0.4), "c2": Color(0.75, 0.1, 0.2)},
 ]
 const HOME_DOCK := [
-	{"app": 9, "key": "phone", "glyph": "phone", "c1": Color(0.45, 0.9, 0.35), "c2": Color(0.1, 0.6, 0.2)},
-	{"app": 4, "key": "camera", "glyph": "camera", "c1": Color(0.88, 0.9, 0.95), "c2": Color(0.45, 0.47, 0.55)},
-	{"app": 5, "key": "photos", "glyph": "photo", "c1": Color(1.0, 0.55, 0.7), "c2": Color(0.85, 0.25, 0.45)},
-	{"app": 8, "key": "settings", "glyph": "gear", "c1": Color(0.78, 0.8, 0.85), "c2": Color(0.35, 0.37, 0.45)},
+	{"app": 9, "key": "phone", "c1": Color(0.45, 0.92, 0.42), "c2": Color(0.1, 0.72, 0.25)},
+	{"app": 4, "key": "camera", "c1": Color(0.88, 0.89, 0.91), "c2": Color(0.6, 0.61, 0.65)},
+	{"app": 5, "key": "photos", "c1": Color(1.0, 1.0, 1.0), "c2": Color(0.92, 0.92, 0.95)},
+	{"app": 8, "key": "settings", "c1": Color(0.78, 0.79, 0.82), "c2": Color(0.5, 0.51, 0.56)},
 ]
 const CONTACTS := [
 	{"name": "police", "num": "100", "kind": "police", "icon": "police", "col": Color(0.2, 0.4, 0.95)},
@@ -251,6 +251,8 @@ func _make_styles() -> void:
 		_mk(Color(0.03, 0.04, 0.08, 0.72), Color(1, 1, 1, 0.18), 18, 2),
 		_mk(Color(0.3, 0.3, 0.34, 0.8), Color(1, 1, 1, 0.2), 14, 2),
 		_mk(Color(1, 1, 1, 0.14), Color(1, 1, 1, 0.28), 30, 2),
+		_mk(Color(1, 1, 1, 0.2), Color(1, 1, 1, 0.15), 34, 1),
+		_mk(Color(0.15, 0.15, 0.17, 0.96), Color(0, 0, 0, 0), 12, 0),
 	]
 
 
@@ -277,8 +279,10 @@ func _plain(c: Control, r: Rect2, label: String, kind: int = 5, size: int = 20) 
 
 
 func _title(c: Control, key: String) -> void:
-	_t(c, T(key), Vector2(220, 128), 30)
-	c.draw_line(Vector2(40, 158), Vector2(400, 158), Color(1, 1, 1, 0.25), 2.0)
+	if lang == "ar":
+		_t(c, T(key), Vector2(404, 128), 32, Color.WHITE, 2)
+	else:
+		_t(c, T(key), Vector2(34, 128), 32, Color.WHITE, 0)
 
 
 func _grad(c: Control, r: Rect2, top: Color, bot: Color) -> void:
@@ -561,7 +565,7 @@ func _back() -> void:
 # ---------------------------------------------------------------- touch / actions
 
 func touch(lp: Vector2) -> void:
-	if lp.distance_to(Vector2(220, 845)) < 42.0:
+	if lp.y > 836.0 and absf(lp.x - 220.0) < 90.0:
 		if app == -1:
 			g._set_phone(false)
 		else:
@@ -570,7 +574,11 @@ func touch(lp: Vector2) -> void:
 	for i in range(hits.size() - 1, -1, -1):
 		var h: Dictionary = hits[i]
 		if (h["r"] as Rect2).has_point(lp):
-			_act(String(h["a"]), h["v"])
+			var val = h["v"]
+			if h.has("s"):
+				var sp: Vector2 = h["s"]
+				val = clampf((lp.x - sp.x) / sp.y, 0.0, 1.0)
+			_act(String(h["a"]), val)
 			return
 
 
@@ -766,6 +774,16 @@ func _act(a: String, v) -> void:
 			_start_call(String(r["n"]), String(r["num"]), String(r["k"]), r["c"], String(r.get("ic", r["k"])))
 		"end_call":
 			_end_call()
+		"page_set":
+			page = String(v)
+		"back_page":
+			_back()
+		"vol_set":
+			volume = snappedf(clampf(float(v), 0.0, 1.0), 0.05)
+			_apply_options()
+			dirty = true
+		"size_set":
+			g.phone_scale = clampf(0.5 + float(v) * 0.55, 0.5, 1.05)
 
 
 func _pay(price: int) -> bool:
@@ -913,94 +931,95 @@ func _draw_phone_app(c: Control) -> void:
 	if call_state != "":
 		_draw_call(c)
 		return
-	_title(c, "phone")
+	c.draw_rect(Rect2(20, 20, 400, 860), Color(0, 0, 0, 0.55))
 	if phone_tab == 0:
 		_draw_keypad(c)
 	elif phone_tab == 1:
 		_draw_recents(c)
 	else:
 		_draw_contacts(c)
-	var keys := ["keypad", "recents", "contacts"]
-	c.draw_style_box(sbs[6], Rect2(40, 722, 360, 62))
-	for i in 3:
-		var r := Rect2(48 + i * 118, 728, 112, 50)
-		if phone_tab == i:
-			c.draw_style_box(sbs[1], r)
-		_t(c, T(String(keys[i])), r.position + r.size * 0.5, 15)
-		hits.append({"r": r, "a": "ph_tab", "v": i})
+	_tab_bar(c)
 
 
 func _draw_keypad(c: Control) -> void:
-	_t(c, dial if dial != "" else " ", Vector2(220, 205), 40)
+	_t(c, dial if dial != "" else " ", Vector2(220, 175), 40)
 	var digs := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"]
+	var lets := ["", "ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ", "", "+", ""]
 	for i in 12:
-		var p := Vector2(110.0 + float(i % 3) * 110.0, 290.0 + float(i / 3) * 84.0)
-		c.draw_circle(p, 36.0, Color(1, 1, 1, 0.14))
-		c.draw_arc(p, 36.0, 0.0, TAU, 32, Color(1, 1, 1, 0.4), 2.0, true)
-		_t(c, String(digs[i]), p, 30)
+		var p := Vector2(110.0 + float(i % 3) * 110.0, 262.0 + float(i / 3) * 86.0)
+		c.draw_circle(p, 37.0, Color(0.2, 0.2, 0.22, 0.95))
+		var has_l: bool = String(lets[i]) != ""
+		_t(c, String(digs[i]), p + Vector2(0, -6 if has_l else 0), 32)
+		if has_l:
+			_t(c, String(lets[i]), p + Vector2(0, 20), 10, Color(1, 1, 1, 0.7))
 		hits.append({"r": Rect2(p - Vector2(40, 40), Vector2(80, 80)), "a": "dial", "v": digs[i]})
-	var cp := Vector2(220, 650)
-	c.draw_circle(cp + Vector2(0, 4), 42.0, Color(0, 0, 0, 0.3))
-	c.draw_circle(cp, 40.0, Color(0.1, 0.6, 0.2))
-	c.draw_circle(cp + Vector2(0, -3), 34.0, Color(0.3, 0.85, 0.4))
-	_glyph(c, "phone", cp, 20.0)
+	var cp := Vector2(220, 626)
+	c.draw_circle(cp, 38.0, Color(0.2, 0.78, 0.35))
+	_glyph(c, "phone", cp, 18.0)
 	hits.append({"r": Rect2(cp - Vector2(44, 44), Vector2(88, 88)), "a": "dial_call", "v": null})
 	if dial != "":
-		var bp := Vector2(330, 650)
-		c.draw_circle(bp, 26.0, Color(1, 1, 1, 0.14))
-		_t(c, "<", bp, 28)
-		hits.append({"r": Rect2(bp - Vector2(30, 30), Vector2(60, 60)), "a": "dial_del", "v": null})
+		var bp := Vector2(330, 626)
+		c.draw_colored_polygon(PackedVector2Array([bp + Vector2(-16, 0), bp + Vector2(-7, -11), bp + Vector2(15, -11), bp + Vector2(15, 11), bp + Vector2(-7, 11)]), Color(1, 1, 1, 0.75))
+		c.draw_line(bp + Vector2(-2, -5), bp + Vector2(8, 5), Color(0.1, 0.1, 0.12), 2.0)
+		c.draw_line(bp + Vector2(8, -5), bp + Vector2(-2, 5), Color(0.1, 0.1, 0.12), 2.0)
+		hits.append({"r": Rect2(bp - Vector2(34, 34), Vector2(68, 68)), "a": "dial_del", "v": null})
 
 
 func _draw_recents(c: Control) -> void:
+	_title(c, "recents")
 	if recents.is_empty():
 		_t(c, T("empty"), Vector2(220, 400), 22, Color(1, 1, 1, 0.7))
 		return
-	for i in mini(recents.size(), 9):
+	var n := mini(recents.size(), 9)
+	c.draw_style_box(sbs[8], Rect2(30, 170, 380, float(n) * 58.0))
+	for i in n:
 		var rc: Dictionary = recents[i]
-		var r := Rect2(36, 176 + i * 58, 368, 52)
-		c.draw_style_box(sbs[4], r)
-		_contact_icon(c, r.position + Vector2(32, 26), 20.0, rc["c"], String(rc.get("ic", rc["k"])))
-		_t(c, T(String(rc["n"])), r.position + Vector2(66, 18), 18, Color.WHITE, 0)
-		_t(c, String(rc["num"]), r.position + Vector2(66, 38), 13, Color(1, 1, 1, 0.6), 0)
-		_t(c, String(rc["t"]), r.position + Vector2(356, 26), 15, Color(1, 1, 1, 0.7), 2)
+		var r := Rect2(30, 170 + i * 58, 380, 58)
+		_contact_icon(c, r.position + Vector2(36, 29), 19.0, rc["c"], String(rc.get("ic", rc["k"])))
+		_t(c, T(String(rc["n"])), r.position + Vector2(68, 20), 18, Color.WHITE, 0)
+		_t(c, String(rc["num"]), r.position + Vector2(68, 41), 13, Color(1, 1, 1, 0.55), 0)
+		_t(c, String(rc["t"]), r.position + Vector2(366, 29), 15, Color(1, 1, 1, 0.55), 2)
+		if i < n - 1:
+			c.draw_line(r.position + Vector2(68, 58), r.position + Vector2(380, 58), Color(1, 1, 1, 0.1), 1.0)
 		hits.append({"r": r, "a": "redial", "v": i})
 
 
 func _draw_contacts(c: Control) -> void:
+	_title(c, "contacts")
+	c.draw_style_box(sbs[8], Rect2(30, 170, 380, float(CONTACTS.size()) * 66.0))
 	for i in CONTACTS.size():
 		var ct: Dictionary = CONTACTS[i]
-		var r := Rect2(36, 176 + i * 76, 368, 68)
-		c.draw_style_box(sbs[4], r)
-		_contact_icon(c, r.position + Vector2(40, 34), 26.0, ct["col"], String(ct["icon"]))
-		_t(c, T(String(ct["name"])), r.position + Vector2(84, 24), 20, Color.WHITE, 0)
-		_t(c, String(ct["num"]), r.position + Vector2(84, 48), 15, Color(1, 1, 1, 0.6), 0)
-		var bp := r.position + Vector2(322, 34)
-		c.draw_style_box(_sq(Color(0.2, 0.75, 0.35), 17, true), Rect2(bp - Vector2(26, 19), Vector2(52, 38)))
-		_glyph(c, "phone", bp, 10.0)
+		var r := Rect2(30, 170 + i * 66, 380, 66)
+		_contact_icon(c, r.position + Vector2(40, 33), 24.0, ct["col"], String(ct["icon"]))
+		_t(c, T(String(ct["name"])), r.position + Vector2(78, 24), 19, Color.WHITE, 0)
+		_t(c, String(ct["num"]), r.position + Vector2(78, 46), 14, Color(1, 1, 1, 0.55), 0)
+		var bp := r.position + Vector2(342, 33)
+		c.draw_circle(bp, 18.0, Color(0.2, 0.78, 0.35))
+		_glyph(c, "phone", bp, 9.0)
+		if i < CONTACTS.size() - 1:
+			c.draw_line(r.position + Vector2(78, 66), r.position + Vector2(380, 66), Color(1, 1, 1, 0.1), 1.0)
 		hits.append({"r": r, "a": "call_contact", "v": i})
 
 
 func _draw_call(c: Control) -> void:
-	var p := Vector2(220, 300)
+	_grad(c, Rect2(20, 20, 400, 860), call_col.darkened(0.55), Color(0.02, 0.02, 0.03))
+	var p := Vector2(220, 270)
 	if call_state == "ringing":
 		for k in 2:
-			var rr := 86.0 + fmod(call_t * 40.0 + float(k) * 22.0, 44.0)
-			c.draw_arc(p, rr, 0.0, TAU, 40, Color(1, 1, 1, 0.3 - (rr - 86.0) / 44.0 * 0.3), 3.0, true)
-	_contact_icon(c, p, 72.0, call_col, call_ic)
-	_t(c, T(call_name), Vector2(220, 410), 34)
-	_t(c, call_num, Vector2(220, 452), 20, Color(1, 1, 1, 0.65))
+			var rr := 70.0 + fmod(call_t * 40.0 + float(k) * 22.0, 44.0)
+			c.draw_arc(p, rr, 0.0, TAU, 40, Color(1, 1, 1, 0.3 - (rr - 70.0) / 44.0 * 0.3), 3.0, true)
+	_contact_icon(c, p, 58.0, call_col, call_ic)
+	_t(c, T(call_name), Vector2(220, 380), 34)
+	_t(c, call_num, Vector2(220, 420), 20, Color(1, 1, 1, 0.65))
 	if call_state == "ringing":
 		var dots := ".".repeat(1 + int(call_t * 2.0) % 3)
-		_t(c, T("calling").trim_suffix("...") + dots, Vector2(220, 510), 22, Color(1, 1, 1, 0.85))
+		_t(c, T("calling").trim_suffix("...") + dots, Vector2(220, 465), 22, Color(1, 1, 1, 0.85))
 	else:
-		_t(c, "00:%02d" % int(call_t), Vector2(220, 510), 22, Color(0.5, 1, 0.6))
-		_t(c, call_msg, Vector2(220, 560), 20, Color(1, 0.9, 0.5))
-	var ep := Vector2(220, 680)
-	c.draw_circle(ep + Vector2(0, 4), 46.0, Color(0, 0, 0, 0.3))
-	c.draw_circle(ep, 44.0, Color(0.7, 0.1, 0.12))
-	c.draw_circle(ep + Vector2(0, -3), 38.0, Color(0.95, 0.25, 0.25))
-	_t(c, T("end"), ep, 17)
+		_t(c, "00:%02d" % int(call_t), Vector2(220, 465), 22, Color(0.5, 1, 0.6))
+		_t(c, call_msg, Vector2(220, 515), 20, Color(1, 0.9, 0.5))
+	var ep := Vector2(220, 730)
+	c.draw_circle(ep, 40.0, Color(0.95, 0.22, 0.2))
+	_t(c, T("end"), ep, 16)
 	hits.append({"r": Rect2(ep - Vector2(48, 48), Vector2(96, 96)), "a": "end_call", "v": null})
 
 
@@ -1083,47 +1102,63 @@ func _stop_rec() -> void:
 
 
 func _draw_camera(c: Control) -> void:
-	_title(c, "camera")
-	var vr := Rect2(34, 168, 372, 209)
-	c.draw_rect(vr, Color.BLACK)
-	c.draw_texture_rect(sv.get_texture(), vr, false)
+	c.draw_rect(Rect2(20, 20, 400, 860), Color.BLACK)
+	var vr := Rect2(20, 90, 400, 533)
+	c.draw_rect(vr, Color(0.03, 0.03, 0.04))
+	c.draw_texture_rect_region(sv.get_texture(), vr, Rect2(277.5, 0.0, 405.0, 540.0))
 	for k in [1, 2]:
 		var fr: float = float(k) / 3.0
-		c.draw_line(vr.position + Vector2(vr.size.x * fr, 0), vr.position + Vector2(vr.size.x * fr, vr.size.y), Color(1, 1, 1, 0.22), 1.0)
-		c.draw_line(vr.position + Vector2(0, vr.size.y * fr), vr.position + Vector2(vr.size.x, vr.size.y * fr), Color(1, 1, 1, 0.22), 1.0)
+		c.draw_line(vr.position + Vector2(vr.size.x * fr, 0), vr.position + Vector2(vr.size.x * fr, vr.size.y), Color(1, 1, 1, 0.2), 1.0)
+		c.draw_line(vr.position + Vector2(0, vr.size.y * fr), vr.position + Vector2(vr.size.x, vr.size.y * fr), Color(1, 1, 1, 0.2), 1.0)
 	if recording:
-		c.draw_circle(vr.position + Vector2(24, 24), 8.0, Color(1, 0.15, 0.15))
 		var secs := float(rec_frames) / _cap_fps()
-		_t(c, "%02d:%02d" % [int(secs) / 60, int(secs) % 60], vr.position + Vector2(48, 24), 18, Color.WHITE, 0)
+		c.draw_style_box(_sq(Color(0.9, 0.15, 0.15), 14, false), Rect2(170, vr.position.y + 10, 80, 28))
+		_t(c, "%02d:%02d" % [int(secs) / 60, int(secs) % 60], Vector2(210, vr.position.y + 24), 15)
 	if flash_t > 0.0:
 		c.draw_rect(vr, Color(1, 1, 1, flash_t))
-	_t(c, "%.1fx" % cam_zoom, vr.position + Vector2(vr.size.x - 34, 22), 18, Color(1, 1, 1, 0.9))
-	_btn(c, Rect2(70, 395, 140, 40), T("photo"), "cam_mode", 0, 1 if cam_mode == 0 else 0)
-	_btn(c, Rect2(230, 395, 140, 40), T("video"), "cam_mode", 1, 1 if cam_mode == 1 else 0)
+	var zy := vr.end.y - 36.0
+	c.draw_style_box(_sq(Color(0, 0, 0, 0.45), 17, false), Rect2(150, zy - 17, 140, 34))
+	_t(c, "-", Vector2(172, zy), 24)
+	_t(c, "%.1fx" % cam_zoom, Vector2(220, zy), 16, Color(1, 0.84, 0.1))
+	_t(c, "+", Vector2(268, zy), 24)
+	hits.append({"r": Rect2(150, zy - 17, 44, 34), "a": "cam_zoom", "v": -0.5})
+	hits.append({"r": Rect2(246, zy - 17, 44, 34), "a": "cam_zoom", "v": 0.5})
+	var yel := Color(1, 0.84, 0.1)
+	var dim := Color(1, 1, 1, 0.7)
+	_t(c, T("video"), Vector2(160, 652), 16, yel if cam_mode == 1 else dim)
+	_t(c, T("photo"), Vector2(280, 652), 16, yel if cam_mode == 0 else dim)
+	hits.append({"r": Rect2(110, 636, 100, 34), "a": "cam_mode", "v": 1})
+	hits.append({"r": Rect2(230, 636, 100, 34), "a": "cam_mode", "v": 0})
 	if cam_mode == 1:
 		var keys := ["slow", "normal", "fast"]
 		for i in 3:
-			_btn(c, Rect2(40 + i * 128, 448, 120, 38), T(String(keys[i])), "cam_speed", i, 2 if cam_speed == i else 0, 18)
-	_btn(c, Rect2(34, 515, 130, 44), T("selfie") if cam_front else T("photocam"), "cam_flip", null, 0, 17)
-	_btn(c, Rect2(232, 515, 54, 44), "-", "cam_zoom", -0.5, 0, 26)
-	_btn(c, Rect2(296, 515, 54, 44), "+", "cam_zoom", 0.5, 0, 26)
-	var sc := Vector2(220, 680)
-	c.draw_circle(sc, 58.0, Color(1, 1, 1, 0.14))
-	c.draw_arc(sc, 58.0, 0.0, TAU, 40, Color(1, 1, 1, 0.95), 4.0, true)
-	var inner := Color(1, 1, 1, 0.95)
-	var rad := 44.0
+			var cr := Rect2(58 + i * 112, 674, 100, 28)
+			c.draw_style_box(_sq(Color(1, 0.84, 0.1, 0.9) if cam_speed == i else Color(1, 1, 1, 0.15), 14, false), cr)
+			_t(c, T(String(keys[i])), cr.position + cr.size * 0.5, 13, Color(0.1, 0.1, 0.1) if cam_speed == i else Color.WHITE)
+			hits.append({"r": cr, "a": "cam_speed", "v": i})
+	var sc := Vector2(220, 752)
+	c.draw_arc(sc, 40.0, 0.0, TAU, 40, Color.WHITE, 4.0, true)
 	if cam_mode == 1:
-		inner = Color(0.95, 0.15, 0.15)
 		if recording:
-			rad = 26.0
-	c.draw_circle(sc, rad, inner)
-	hits.append({"r": Rect2(sc - Vector2(62, 62), Vector2(124, 124)), "a": "shutter", "v": null})
-	var tr := Rect2(40, 640, 88, 88)
-	c.draw_rect(tr, Color(0, 0, 0, 0.4))
+			c.draw_style_box(_sq(Color(0.95, 0.15, 0.15), 6, false), Rect2(sc - Vector2(15, 15), Vector2(30, 30)))
+		else:
+			c.draw_circle(sc, 32.0, Color(0.95, 0.15, 0.15))
+	else:
+		c.draw_circle(sc, 32.0, Color.WHITE)
+	hits.append({"r": Rect2(sc - Vector2(46, 46), Vector2(92, 92)), "a": "shutter", "v": null})
+	var tr := Rect2(36, 726, 52, 52)
+	c.draw_style_box(_sq(Color(0.15, 0.15, 0.17), 10, false), tr)
 	if last_thumb != null:
-		c.draw_texture_rect(last_thumb, tr, false)
-	c.draw_rect(tr, Color(1, 1, 1, 0.8), false, 2.0)
+		c.draw_texture_rect_region(last_thumb, tr, Rect2(27, 0, 70, 70))
+	c.draw_rect(tr, Color(1, 1, 1, 0.6), false, 1.5)
 	hits.append({"r": tr, "a": "to_gallery", "v": null})
+	var fp := Vector2(378, 752)
+	c.draw_circle(fp, 26.0, Color(0.25, 0.25, 0.28, 0.9))
+	c.draw_arc(fp, 10.0, deg_to_rad(200), deg_to_rad(340), 12, Color.WHITE, 2.5, true)
+	c.draw_arc(fp, 10.0, deg_to_rad(20), deg_to_rad(160), 12, Color.WHITE, 2.5, true)
+	c.draw_circle(fp + Vector2(cos(deg_to_rad(340)), sin(deg_to_rad(340))) * 10.0, 3.0, Color.WHITE)
+	c.draw_circle(fp + Vector2(cos(deg_to_rad(160)), sin(deg_to_rad(160))) * 10.0, 3.0, Color.WHITE)
+	hits.append({"r": Rect2(fp - Vector2(30, 30), Vector2(60, 60)), "a": "cam_flip", "v": null})
 
 
 # ---------------------------------------------------------------- photos app
@@ -1208,7 +1243,7 @@ func _delete_item(i: int) -> void:
 	_scan_gallery()
 	view_i = -1
 	page = ""
-	gal_page = clampi(gal_page, 0, maxi((gal.size() - 1) / 18, 0))
+	gal_page = clampi(gal_page, 0, maxi((gal.size() - 1) / 24, 0))
 	if not gal.is_empty() and gal[0]["t"] == "p":
 		last_thumb = _thumb(gal[0])
 
@@ -1225,57 +1260,77 @@ func _wall_from(path: String) -> void:
 
 
 func _draw_photos(c: Control) -> void:
-	_title(c, "pickwp" if pick_mode else "photos")
 	if page == "edit":
+		c.draw_rect(Rect2(20, 20, 400, 860), Color.BLACK)
+		_back_btn(c, T("back"))
 		_draw_edit(c)
 		return
 	if page == "view":
 		_draw_view(c)
 		return
+	_title(c, "pickwp" if pick_mode else "photos")
+	if pick_mode:
+		_back_btn(c, T("settings"))
 	if gal.is_empty():
 		_t(c, T("empty"), Vector2(220, 420), 24, Color(1, 1, 1, 0.7))
 		return
-	var per := 18
+	var per := 24
 	var pages := maxi((gal.size() - 1) / per + 1, 1)
 	gal_page = clampi(gal_page, 0, pages - 1)
 	for k in per:
 		var idx := gal_page * per + k
 		if idx >= gal.size():
 			break
-		var r := Rect2(36 + (k % 3) * 124, 176 + (k / 3) * 78, 120, 68)
-		c.draw_rect(r, Color(0, 0, 0, 0.45))
+		var r := Rect2(21 + (k % 4) * 100, 170 + (k / 4) * 100, 98, 98)
+		c.draw_rect(r, Color(0.1, 0.1, 0.12))
 		var tex := _thumb(gal[idx])
 		if tex != null:
-			c.draw_texture_rect(tex, r, false)
+			c.draw_texture_rect_region(tex, r, Rect2(27, 0, 70, 70))
 		if gal[idx]["t"] == "c":
-			var mid := r.position + r.size * 0.5
-			c.draw_circle(mid, 16.0, Color(0, 0, 0, 0.6))
-			c.draw_colored_polygon(PackedVector2Array([mid + Vector2(-5, -9), mid + Vector2(-5, 9), mid + Vector2(10, 0)]), Color.WHITE)
-		c.draw_rect(r, Color(1, 1, 1, 0.5), false, 1.5)
+			var b := r.position + Vector2(14, 84)
+			c.draw_colored_polygon(PackedVector2Array([b + Vector2(-5, -6), b + Vector2(-5, 6), b + Vector2(6, 0)]), Color.WHITE)
 		hits.append({"r": r, "a": "view", "v": idx})
 	if pages > 1:
-		_btn(c, Rect2(60, 740, 100, 44), "<", "gal_prev", null, 0, 24)
-		_t(c, "%d / %d" % [gal_page + 1, pages], Vector2(220, 762), 20)
-		_btn(c, Rect2(280, 740, 100, 44), ">", "gal_next", null, 0, 24)
+		c.draw_rect(Rect2(20, 782, 400, 72), Color(0.09, 0.09, 0.1, 0.97))
+		_btn(c, Rect2(50, 792, 90, 40), "<", "gal_prev", null, 0, 24)
+		_t(c, "%d / %d" % [gal_page + 1, pages], Vector2(220, 812), 18)
+		_btn(c, Rect2(300, 792, 90, 40), ">", "gal_next", null, 0, 24)
 
 
 func _draw_view(c: Control) -> void:
-	var r := Rect2(34, 170, 372, 209)
-	c.draw_rect(r, Color.BLACK)
+	c.draw_rect(Rect2(20, 20, 400, 860), Color.BLACK)
+	_back_btn(c, T("photos"))
+	var r := Rect2(20, 300, 400, 225)
+	c.draw_rect(r, Color(0.05, 0.05, 0.06))
 	if view_tex != null:
 		c.draw_texture_rect(view_tex, r, false)
 	var is_clip: bool = view_i >= 0 and view_i < gal.size() and gal[view_i]["t"] == "c"
+	for sd in [0, 1]:
+		var cp := Vector2(46.0 + float(sd) * 348.0, 412)
+		c.draw_circle(cp, 20.0, Color(0, 0, 0, 0.5))
+		_t(c, "<" if sd == 0 else ">", cp, 22)
+		hits.append({"r": Rect2(cp - Vector2(26, 40), Vector2(52, 80)), "a": "v_prev" if sd == 0 else "v_next", "v": null})
+	c.draw_rect(Rect2(20, 782, 400, 72), Color(0.09, 0.09, 0.1, 0.97))
+	var blue := Color(0.25, 0.6, 1.0)
 	if is_clip:
-		_btn(c, Rect2(40, 400, 90, 40), "||" if clip_play else ">", "clip_play", null, 0, 22)
+		c.draw_circle(Vector2(220, 590), 30.0, Color(1, 1, 1, 0.15))
+		_t(c, "||" if clip_play else ">", Vector2(220, 590), 24)
+		hits.append({"r": Rect2(184, 554, 72, 72), "a": "clip_play", "v": null})
 		var sp := [0.5, 1.0, 2.0]
 		for i in 3:
-			_btn(c, Rect2(140 + i * 86, 400, 80, 40), "%sx" % str(sp[i]), "clip_speed", sp[i], 1 if is_equal_approx(clip_speed, sp[i]) else 0, 18)
+			var cr := Rect2(58 + i * 112, 650, 100, 30)
+			c.draw_style_box(_sq(Color(0.25, 0.6, 1.0, 0.9) if is_equal_approx(clip_speed, sp[i]) else Color(1, 1, 1, 0.15), 15, false), cr)
+			_t(c, "%sx" % str(sp[i]), cr.position + cr.size * 0.5, 15)
+			hits.append({"r": cr, "a": "clip_speed", "v": sp[i]})
+		_t(c, T("delete"), Vector2(220, 816), 17, Color(1, 0.3, 0.3))
+		hits.append({"r": Rect2(140, 790, 160, 44), "a": "v_del", "v": null})
 	else:
-		_btn(c, Rect2(40, 400, 110, 44), T("edit"), "v_edit", null, 1, 18)
-		_btn(c, Rect2(160, 400, 120, 44), T("setwp"), "v_wall", null, 0, 16)
-	_btn(c, Rect2(290, 400 if not is_clip else 460, 100, 44), T("delete"), "v_del", null, 3, 16)
-	_btn(c, Rect2(60, 540, 100, 50), "<", "v_prev", null, 0, 26)
-	_btn(c, Rect2(280, 540, 100, 50), ">", "v_next", null, 0, 26)
+		_t(c, T("edit"), Vector2(100, 816), 17, blue)
+		_t(c, T("setwp"), Vector2(220, 816), 17, blue)
+		_t(c, T("delete"), Vector2(340, 816), 17, Color(1, 0.3, 0.3))
+		hits.append({"r": Rect2(40, 790, 120, 44), "a": "v_edit", "v": null})
+		hits.append({"r": Rect2(160, 790, 120, 44), "a": "v_wall", "v": null})
+		hits.append({"r": Rect2(280, 790, 120, 44), "a": "v_del", "v": null})
 
 
 func _open_edit() -> void:
@@ -1491,17 +1546,18 @@ func _stat(c: Control, p: Vector2, label: String, val: float) -> void:
 
 func _draw_store(c: Control) -> void:
 	_title(c, "store")
-	var mp := Rect2(292, 108, 112, 36)
+	var rtl := lang == "ar"
+	var mp := Rect2(30.0 if rtl else 298.0, 106, 112, 36)
 	c.draw_style_box(sbs[4], mp)
 	_t(c, _fmt(money), mp.position + mp.size * 0.5, 16 if money < 100000000 else 12, Color(1, 0.85, 0.3))
 	var keys := ["cars", "ammo", "air", "apps"]
-	c.draw_style_box(sbs[6], Rect2(36, 166, 368, 48))
+	c.draw_style_box(_sq(Color(0.45, 0.45, 0.5, 0.35), 9, false), Rect2(30, 160, 380, 36))
 	for i in 4:
-		var r := Rect2(40 + i * 91, 170, 87, 40)
+		var sr := Rect2(32.0 + float(i) * 94.5, 162, 94, 32)
 		if store_tab == i:
-			c.draw_style_box(sbs[1], r)
-		_t(c, T(String(keys[i])), r.position + r.size * 0.5, 14)
-		hits.append({"r": r, "a": "store_tab", "v": i})
+			c.draw_style_box(_sq(Color(0.6, 0.6, 0.66, 0.95), 7, false), sr)
+		_t(c, T(String(keys[i])), sr.position + sr.size * 0.5, 14)
+		hits.append({"r": sr, "a": "store_tab", "v": i})
 	var items := _store_items()
 	var per := 4
 	var pages := maxi((items.size() - 1) / per + 1, 1)
@@ -1511,48 +1567,45 @@ func _draw_store(c: Control) -> void:
 		if idx >= items.size():
 			break
 		var it: Dictionary = items[idx]
-		var r2 := Rect2(36, 226 + k * 120, 368, 112)
-		c.draw_style_box(sbs[4], r2)
+		var r2 := Rect2(30, 208 + k * 118, 380, 112)
 		var col: Color = it["color"]
-		var hero := Rect2(r2.position.x + 8, r2.position.y + 8, 96, 96)
-		_grad(c, hero, col.lightened(0.25), col.darkened(0.45))
-		c.draw_rect(hero, Color(1, 1, 1, 0.35), false, 2.0)
 		var kind := String(it["k"])
-		var icon := "car"
-		if kind == "ammo":
-			icon = "guns"
-		g._icon(c, icon, hero.position + hero.size * 0.5, 24.0)
-		_t(c, String(it["name"]), r2.position + Vector2(116, 22), 18, Color.WHITE, 0)
-		var br := Rect2(r2.position.x + r2.size.x - 124, r2.position.y + r2.size.y - 44, 112, 34)
+		var ic := Rect2(r2.position + Vector2(6, 16), Vector2(80, 80))
+		_rr_grad(c, ic, 18.0, col.lightened(0.25), col.darkened(0.35))
+		g._icon(c, "guns" if kind == "ammo" else "car", ic.position + ic.size * 0.5, 20.0)
+		_t(c, String(it["name"]), r2.position + Vector2(100, 28), 18, Color.WHITE, 0)
+		c.draw_line(Vector2(30, r2.end.y + 3), Vector2(410, r2.end.y + 3), Color(1, 1, 1, 0.1), 1.0)
+		var br := Rect2(r2.end.x - 104, r2.position.y + 40, 96, 34)
 		if kind == "soon":
-			_plain(c, br, T("soon"), 5, 15)
+			_capsule(c, br, T("soon"), "", null, 2, false)
 			continue
 		if kind == "car":
-			_stat(c, r2.position + Vector2(116, 44), "SPD", float(it["spd"]))
-			_stat(c, r2.position + Vector2(116, 58), "ACC", float(it["acc"]))
-			_stat(c, r2.position + Vector2(116, 72), "HND", float(it["hnd"]))
+			_stat(c, r2.position + Vector2(100, 52), "SPD", float(it["spd"]))
+			_stat(c, r2.position + Vector2(100, 66), "ACC", float(it["acc"]))
+			_stat(c, r2.position + Vector2(100, 80), "HND", float(it["hnd"]))
 		if kind == "ammo":
-			_t(c, "+%d" % int(it["n"]), r2.position + Vector2(116, 52), 22, Color(1, 0.85, 0.3), 0)
+			_t(c, "+%d" % int(it["n"]), r2.position + Vector2(100, 60), 22, Color(1, 0.85, 0.3), 0)
 		if kind == "heli":
-			_t(c, T("flysoon"), r2.position + Vector2(116, 52), 12, Color(1, 1, 1, 0.55), 0)
+			_t(c, T("flysoon"), r2.position + Vector2(100, 60), 12, Color(1, 1, 1, 0.55), 0)
 		var price := int(it["price"])
-		_t(c, "FREE" if price == 0 else _fmt(price), r2.position + Vector2(116, 94), 16, Color(1, 0.85, 0.3), 0)
+		var can := money >= price
+		var plabel := "FREE" if price == 0 else _fmt(price)
 		if kind == "ammo":
-			_btn(c, br, T("buy"), "buy_ammo", int(it["idx"]), 2 if money >= price else 0, 16)
+			_capsule(c, br, plabel, "buy_ammo", int(it["idx"]), 0, can)
 		elif kind == "heli":
 			if bool(owned.get("heli", false)):
-				_plain(c, br, T("owned"), 5, 15)
+				_capsule(c, br, T("owned"), "", null, 2, false)
 			else:
-				_btn(c, br, T("buy"), "buy_heli", null, 2 if money >= price else 0, 16)
+				_capsule(c, br, plabel, "buy_heli", null, 0, can)
 		else:
 			var id := String(it["id"])
 			if bool(owned.get(id, false)):
 				if car_sel == id:
-					_plain(c, br, T("selected"), 5, 14)
+					_capsule(c, br, T("selected"), "", null, 2, false)
 				else:
-					_btn(c, br, T("select"), "sel_car", id, 1, 16)
+					_capsule(c, br, T("select"), "sel_car", id, 1, true)
 			else:
-				_btn(c, br, T("buy"), "buy_car", id, 2 if money >= price else 0, 16)
+				_capsule(c, br, plabel, "buy_car", id, 0, can)
 	if pages > 1:
 		_btn(c, Rect2(60, 712, 100, 38), "<", "store_prev", null, 0, 22)
 		_t(c, "%d / %d" % [store_page + 1, pages], Vector2(220, 731), 18)
@@ -1562,29 +1615,56 @@ func _draw_store(c: Control) -> void:
 # ---------------------------------------------------------------- settings app
 
 func _draw_settings(c: Control) -> void:
+	if page == "lang":
+		_back_btn(c, T("settings"))
+		_title(c, "language")
+		c.draw_style_box(sbs[8], Rect2(30, 176, 380, 250))
+		for i in LANGS.size():
+			var y := 176.0 + float(i) * 50.0
+			_t(c, String(LANG_NAMES[i]), Vector2(50, y + 25), 18, Color.WHITE, 0)
+			if lang == LANGS[i]:
+				c.draw_polyline(PackedVector2Array([Vector2(380, y + 26), Vector2(386, y + 33), Vector2(398, y + 17)]), Color(0.25, 0.6, 1.0), 3.0, true)
+			if i < LANGS.size() - 1:
+				c.draw_line(Vector2(50, y + 50), Vector2(410, y + 50), Color(1, 1, 1, 0.1), 1.0)
+			hits.append({"r": Rect2(30, y, 380, 50), "a": "set_lang", "v": LANGS[i]})
+		return
+	if page == "wall":
+		_back_btn(c, T("settings"))
+		_title(c, "wallpaper")
+		for i in WALLS.size():
+			var r2 := Rect2(36.0 + float(i) * 74.0, 176, 66, 120)
+			var w: Array = WALLS[i]
+			_rr_grad(c, r2, 12.0, w[0], w[1])
+			var pts := _rr_pts(r2, 12.0)
+			pts.append(pts[0])
+			c.draw_polyline(pts, Color(1, 1, 1, 0.95 if wall_idx == i else 0.25), 3.0 if wall_idx == i else 1.5, true)
+			hits.append({"r": r2, "a": "set_wall", "v": i})
+		c.draw_style_box(sbs[8], Rect2(30, 320, 380, 50))
+		_t(c, T("photos"), Vector2(50, 345), 18, Color.WHITE, 0)
+		_chev(c, 396, 345)
+		hits.append({"r": Rect2(30, 320, 380, 50), "a": "wall_photo", "v": null})
+		return
 	_title(c, "settings")
-	_t(c, T("language"), Vector2(40, 186), 18, Color(1, 1, 1, 0.8), 0)
-	for i in LANGS.size():
-		var r := Rect2(40 + (i % 3) * 122, 205 + (i / 3) * 52, 114, 44)
-		_btn(c, r, String(LANG_NAMES[i]), "set_lang", LANGS[i], 1 if lang == LANGS[i] else 0, 16)
-	_t(c, T("wallpaper"), Vector2(40, 330), 18, Color(1, 1, 1, 0.8), 0)
-	for i in WALLS.size():
-		var r2 := Rect2(40 + i * 62, 352, 54, 70)
-		var w: Array = WALLS[i]
-		_grad(c, r2, w[0], w[1])
-		c.draw_rect(r2, Color(1, 1, 1, 0.95 if wall_idx == i else 0.3), false, 3.0 if wall_idx == i else 1.5)
-		hits.append({"r": r2, "a": "set_wall", "v": i})
-	_btn(c, Rect2(40, 435, 360, 44), T("photos") + "  >", "wall_photo", null, 0, 18)
-	_btn(c, Rect2(40, 495, 360, 44), "%s: %s" % [T("shadows"), T("on") if shadows else T("off")], "toggle_shadows", null, 2 if shadows else 0, 18)
-	_btn(c, Rect2(40, 550, 360, 44), "%s: %s" % [T("fps"), T("on") if show_fps else T("off")], "toggle_fps", null, 2 if show_fps else 0, 18)
-	_t(c, T("volume"), Vector2(40, 628), 18, Color(1, 1, 1, 0.8), 0)
-	_btn(c, Rect2(170, 608, 56, 40), "-", "vol", -0.1, 0, 26)
-	_t(c, "%d%%" % int(volume * 100.0), Vector2(270, 628), 22)
-	_btn(c, Rect2(318, 608, 56, 40), "+", "vol", 0.1, 0, 26)
-	_t(c, T("phonesize"), Vector2(40, 686), 18, Color(1, 1, 1, 0.8), 0)
-	_btn(c, Rect2(170, 666, 56, 40), "-", "zoom", -0.08, 0, 26)
-	_t(c, "%d%%" % int(float(g.phone_scale) * 100.0), Vector2(270, 686), 22)
-	_btn(c, Rect2(318, 666, 56, 40), "+", "zoom", 0.08, 0, 26)
+	var li := maxi(LANGS.find(lang), 0)
+	c.draw_style_box(sbs[8], Rect2(30, 176, 380, 100))
+	_set_row(c, 176, Color(0.04, 0.52, 1.0), "globe", T("language"), String(LANG_NAMES[li]), "page_set", "lang")
+	c.draw_line(Vector2(80, 226), Vector2(410, 226), Color(1, 1, 1, 0.1), 1.0)
+	_set_row(c, 226, Color(0.35, 0.34, 0.84), "wall", T("wallpaper"), "", "page_set", "wall")
+	c.draw_style_box(sbs[8], Rect2(30, 296, 380, 100))
+	_set_icon(c, Vector2(56, 321), Color(0.55, 0.55, 0.6), "shadow")
+	_t(c, T("shadows"), Vector2(80, 321), 18, Color.WHITE, 0)
+	_switch(c, 372, 321, shadows)
+	hits.append({"r": Rect2(30, 296, 380, 50), "a": "toggle_shadows", "v": null})
+	c.draw_line(Vector2(80, 346), Vector2(410, 346), Color(1, 1, 1, 0.1), 1.0)
+	_set_icon(c, Vector2(56, 371), Color(0.2, 0.7, 0.4), "fps")
+	_t(c, T("fps"), Vector2(80, 371), 18, Color.WHITE, 0)
+	_switch(c, 372, 371, show_fps)
+	hits.append({"r": Rect2(30, 346, 380, 50), "a": "toggle_fps", "v": null})
+	c.draw_style_box(sbs[8], Rect2(30, 416, 380, 130))
+	_slider_row(c, 416, Color(0.95, 0.3, 0.35), "vol", T("volume"), "%d%%" % int(volume * 100.0), volume, "vol_set")
+	c.draw_line(Vector2(80, 481), Vector2(410, 481), Color(1, 1, 1, 0.1), 1.0)
+	var sr := (float(g.phone_scale) - 0.5) / 0.55
+	_slider_row(c, 481, Color(0.55, 0.55, 0.6), "size", T("phonesize"), "%d%%" % int(float(g.phone_scale) * 100.0), sr, "size_set")
 
 
 # ---------------------------------------------------------------- glyphs and round icons
@@ -1651,29 +1731,6 @@ func _icon_tex(key: String) -> Texture2D:
 	return t
 
 
-func _round_icon(c: Control, p: Vector2, r: float, it: Dictionary, label: String, dim: bool, show_label: bool) -> void:
-	var c1: Color = it["c1"]
-	var c2: Color = it["c2"]
-	var tex := _icon_tex(String(it["key"]))
-	c.draw_circle(p + Vector2(0, 5), r + 1.0, Color(0, 0, 0, 0.35))
-	if tex != null:
-		c.draw_texture_rect(tex, Rect2(p - Vector2(r, r), Vector2(r, r) * 2.0), false)
-	else:
-		c.draw_circle(p, r, c2)
-		c.draw_circle(p + Vector2(0, -r * 0.07), r * 0.9, c2.lerp(c1, 0.45))
-		c.draw_circle(p + Vector2(0, -r * 0.14), r * 0.76, c1)
-		c.draw_arc(p, r * 0.84, deg_to_rad(212), deg_to_rad(328), 24, Color(1, 1, 1, 0.3), r * 0.16, true)
-		c.draw_arc(p, r, 0.0, TAU, 48, Color(1, 1, 1, 0.45), 2.0, true)
-		_glyph(c, String(it["glyph"]), p + Vector2(0, -r * 0.02), r * 0.5)
-	if dim:
-		c.draw_circle(p, r, Color(0, 0, 0, 0.45))
-	var h := r * 2.0 + 16.0
-	if show_label:
-		_t(c, label, p + Vector2(0, r + 18.0), 16, Color(1, 1, 1, 0.55 if dim else 0.95))
-		h += 20.0
-	hits.append({"r": Rect2(p - Vector2(r + 8.0, r + 8.0), Vector2(r * 2.0 + 16.0, h)), "a": "open", "v": int(it["app"])})
-
-
 # ---------------------------------------------------------------- drawing entry points
 
 func draw_home(c: Control) -> void:
@@ -1690,13 +1747,12 @@ func draw_home(c: Control) -> void:
 		hits.append({"r": Rect2(cc - Vector2(24, 24), Vector2(48, 48)), "a": "zoom", "v": 0.08 if sgn == 1 else -0.08})
 	for i in HOME_GRID.size():
 		var it: Dictionary = HOME_GRID[i]
-		var p := Vector2(84.0 + float(i % 4) * 91.0, 330.0 + float(i / 4) * 125.0)
-		_round_icon(c, p, 34.0, it, T(String(it["key"])), int(it["app"]) >= 10, true)
-	c.draw_style_box(sbs[6], Rect2(42, 690, 356, 104))
+		var p := Vector2(84.0 + float(i % 4) * 91.0, 330.0 + float(i / 4) * 118.0)
+		_app_icon(c, p, 64.0, it, T(String(it["key"])), int(it["app"]) >= 10, true)
+	c.draw_style_box(sbs[7], Rect2(28, 748, 384, 98))
 	for i in HOME_DOCK.size():
 		var it2: Dictionary = HOME_DOCK[i]
-		var p2 := Vector2(84.0 + float(i) * 91.0, 742.0)
-		_round_icon(c, p2, 34.0, it2, "", false, false)
+		_app_icon(c, Vector2(84.0 + float(i) * 91.0, 797.0), 64.0, it2, "", false, false)
 
 
 func draw_bg(c: Control) -> void:
@@ -1712,7 +1768,7 @@ func draw_bg(c: Control) -> void:
 		var w: Array = WALLS[clampi(wall_idx, 0, WALLS.size() - 1)]
 		_grad(c, r, w[0], w[1])
 	if app != -1:
-		c.draw_rect(r, Color(0, 0, 0, 0.5))
+		c.draw_rect(r, Color(0, 0, 0, 0.8))
 
 
 func draw(c: Control) -> void:
@@ -1741,3 +1797,214 @@ func draw_hud(ui: Control) -> void:
 		_t(ui, "%d FPS" % Engine.get_frames_per_second(), Vector2(30, 280), 22, Color(1, 1, 1, 0.8), 0)
 	if ringing > 0.0:
 		_t(ui, ring_msg, Vector2(g._vp().x * 0.5, 130), 40, Color(1, 0.4, 0.3))
+
+
+# ---------------------------------------------------------------- iOS style helpers
+
+func _rr_pts(r: Rect2, rad: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	var cs := [Vector2(r.end.x - rad, r.position.y + rad), Vector2(r.end.x - rad, r.end.y - rad), Vector2(r.position.x + rad, r.end.y - rad), Vector2(r.position.x + rad, r.position.y + rad)]
+	var a0 := [-90.0, 0.0, 90.0, 180.0]
+	for k in 4:
+		for s in 7:
+			var a := deg_to_rad(float(a0[k]) + float(s) * 15.0)
+			pts.append(Vector2(cs[k]) + Vector2(cos(a), sin(a)) * rad)
+	return pts
+
+
+func _rr_grad(c: Control, r: Rect2, rad: float, top: Color, bot: Color) -> void:
+	var pts := _rr_pts(r, rad)
+	var cols := PackedColorArray()
+	for p in pts:
+		cols.append(top.lerp(bot, clampf((p.y - r.position.y) / r.size.y, 0.0, 1.0)))
+	c.draw_polygon(pts, cols)
+
+
+func _chev(c: Control, x: float, y: float) -> void:
+	c.draw_polyline(PackedVector2Array([Vector2(x - 4, y - 8), Vector2(x + 4, y), Vector2(x - 4, y + 8)]), Color(1, 1, 1, 0.35), 2.5, true)
+
+
+func _back_btn(c: Control, label: String) -> void:
+	var blue := Color(0.25, 0.6, 1.0)
+	c.draw_polyline(PackedVector2Array([Vector2(46, 90), Vector2(37, 99), Vector2(46, 108)]), blue, 3.0, true)
+	_t(c, label, Vector2(56, 99), 18, blue, 0)
+	hits.append({"r": Rect2(24, 84, 160, 34), "a": "back_page", "v": null})
+
+
+func _switch(c: Control, x: float, y: float, on: bool) -> void:
+	var r := Rect2(x - 25.0, y - 15.0, 50, 30)
+	c.draw_style_box(_sq(Color(0.2, 0.78, 0.35) if on else Color(0.38, 0.38, 0.42), 15, false), r)
+	c.draw_circle(Vector2(x + (10.0 if on else -10.0), y), 12.0, Color.WHITE)
+
+
+func _capsule(c: Control, r: Rect2, label: String, act: String, val, style: int, enabled: bool) -> void:
+	var bg := Color(0.3, 0.3, 0.34, 0.95)
+	var tc := Color(0.25, 0.6, 1.0)
+	if style == 1:
+		bg = Color(0.04, 0.52, 1.0)
+		tc = Color.WHITE
+	elif style == 2:
+		bg = Color(0.3, 0.3, 0.34, 0.6)
+		tc = Color(1, 1, 1, 0.5)
+	if not enabled:
+		tc = Color(1, 1, 1, 0.4)
+	c.draw_style_box(_sq(bg, 17, false), r)
+	_t(c, label, r.position + r.size * 0.5, 14, tc)
+	if style != 2:
+		hits.append({"r": r, "a": act, "v": val})
+
+
+func _set_icon(c: Control, p: Vector2, col: Color, kind: String) -> void:
+	_rr_grad(c, Rect2(p - Vector2(15, 15), Vector2(30, 30)), 7.0, col.lightened(0.15), col.darkened(0.1))
+	var w := Color.WHITE
+	match kind:
+		"globe":
+			c.draw_arc(p, 8.0, 0.0, TAU, 20, w, 1.6, true)
+			c.draw_line(p + Vector2(-8, 0), p + Vector2(8, 0), w, 1.4)
+			c.draw_line(p + Vector2(0, -8), p + Vector2(0, 8), w, 1.4)
+		"wall":
+			c.draw_circle(p + Vector2(-3, -4), 3.0, w)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-9, 8), p + Vector2(-2, -1), p + Vector2(3, 5), p + Vector2(6, 2), p + Vector2(9, 8)]), w)
+		"shadow":
+			c.draw_circle(p, 8.0, w)
+			c.draw_circle(p + Vector2(4, -2), 7.0, col.darkened(0.1))
+		"fps":
+			_t(c, "60", p, 12, w)
+		"vol":
+			c.draw_rect(Rect2(p + Vector2(-8, -3), Vector2(5, 6)), w)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-3, -3), p + Vector2(3, -8), p + Vector2(3, 8), p + Vector2(-3, 3)]), w)
+			c.draw_arc(p + Vector2(3, 0), 6.0, deg_to_rad(-50), deg_to_rad(50), 8, w, 1.5, true)
+		"size":
+			c.draw_rect(Rect2(p + Vector2(-7, -11), Vector2(14, 22)), w, false, 2.0)
+			c.draw_circle(p + Vector2(0, 7), 1.5, w)
+
+
+func _set_row(c: Control, y: float, col: Color, kind: String, label: String, value: String, act: String, val) -> void:
+	_set_icon(c, Vector2(56, y + 25), col, kind)
+	_t(c, label, Vector2(80, y + 25), 18, Color.WHITE, 0)
+	if value != "":
+		_t(c, value, Vector2(372, y + 25), 16, Color(1, 1, 1, 0.5), 2)
+	_chev(c, 396, y + 25)
+	hits.append({"r": Rect2(30, y, 380, 50), "a": act, "v": val})
+
+
+func _slider_row(c: Control, y: float, col: Color, kind: String, label: String, vtxt: String, ratio: float, act: String) -> void:
+	_set_icon(c, Vector2(56, y + 24), col, kind)
+	_t(c, label, Vector2(80, y + 24), 18, Color.WHITE, 0)
+	_t(c, vtxt, Vector2(396, y + 24), 16, Color(1, 1, 1, 0.5), 2)
+	var rr := clampf(ratio, 0.0, 1.0)
+	c.draw_style_box(_sq(Color(1, 1, 1, 0.18), 3, false), Rect2(50, y + 48, 340, 6))
+	c.draw_style_box(_sq(Color(0.25, 0.6, 1.0), 3, false), Rect2(50, y + 48, maxf(340.0 * rr, 6.0), 6))
+	c.draw_circle(Vector2(50.0 + 340.0 * rr, y + 51.0), 11.0, Color.WHITE)
+	hits.append({"r": Rect2(40, y + 34, 360, 34), "a": act, "v": 0.0, "s": Vector2(50, 340)})
+
+
+func _app_icon(c: Control, p: Vector2, sz: float, it: Dictionary, label: String, dim: bool, show_label: bool) -> void:
+	var half := sz * 0.5
+	var r := Rect2(p - Vector2(half, half), Vector2(sz, sz))
+	var rad := sz * 0.225
+	var key := String(it["key"])
+	c.draw_style_box(_sq(Color(0, 0, 0, 0.35), int(rad), false), Rect2(r.position + Vector2(0, 4), r.size))
+	var tex := _icon_tex(key)
+	if tex != null:
+		c.draw_texture_rect(tex, r, false)
+	else:
+		_rr_grad(c, r, rad, it["c1"], it["c2"])
+		_ios_glyph(c, key, p, half)
+		var pts := _rr_pts(r, rad)
+		pts.append(pts[0])
+		c.draw_polyline(pts, Color(1, 1, 1, 0.22), 1.5, true)
+	if dim:
+		c.draw_style_box(_sq(Color(0, 0, 0, 0.45), int(rad), false), r)
+	var h := sz + 16.0
+	if show_label:
+		_t(c, label, p + Vector2(0, half + 17.0), 16, Color(1, 1, 1, 0.55 if dim else 0.95))
+		h += 22.0
+	hits.append({"r": Rect2(p - Vector2(half + 8.0, half + 8.0), Vector2(sz + 16.0, h)), "a": "open", "v": int(it["app"])})
+
+
+func _ios_glyph(c: Control, key: String, p: Vector2, u: float) -> void:
+	match key:
+		"phone":
+			_glyph(c, "phone", p, u * 0.55)
+		"camera":
+			var d := Color(0.16, 0.17, 0.2)
+			c.draw_style_box(_sq(d, int(u * 0.14), false), Rect2(p + Vector2(-0.62, -0.34) * u, Vector2(1.24, 0.82) * u))
+			c.draw_rect(Rect2(p + Vector2(-0.25, -0.5) * u, Vector2(0.5, 0.2) * u), d)
+			c.draw_circle(p + Vector2(0, 0.07) * u, u * 0.3, Color(0.82, 0.83, 0.87))
+			c.draw_circle(p + Vector2(0, 0.07) * u, u * 0.2, Color(0.1, 0.12, 0.2))
+			c.draw_circle(p + Vector2(0.42, -0.15) * u, u * 0.05, Color(1, 0.8, 0.2))
+		"photos":
+			var cols := [Color(1, 0.62, 0.1), Color(1, 0.85, 0.1), Color(0.5, 0.85, 0.2), Color(0.1, 0.78, 0.5), Color(0.1, 0.6, 1), Color(0.4, 0.4, 1), Color(0.75, 0.3, 0.9), Color(1, 0.3, 0.45)]
+			for k in 8:
+				var a := float(k) * TAU / 8.0 - PI * 0.5
+				var col: Color = cols[k]
+				col.a = 0.85
+				c.draw_circle(p + Vector2(cos(a), sin(a)) * u * 0.38, u * 0.36, col)
+		"settings":
+			var d2 := Color(0.25, 0.26, 0.3)
+			var gu := u * 0.62
+			for k in 8:
+				var a2 := float(k) * TAU / 8.0
+				c.draw_line(p + Vector2(cos(a2), sin(a2)) * gu * 0.7, p + Vector2(cos(a2), sin(a2)) * gu * 1.0, d2, gu * 0.3)
+			c.draw_arc(p, gu * 0.55, 0.0, TAU, 24, d2, gu * 0.3, true)
+		"map":
+			c.draw_line(p + Vector2(-0.8, 0.6) * u, p + Vector2(0.8, -0.5) * u, Color(1, 1, 1, 0.95), u * 0.28)
+			c.draw_line(p + Vector2(-0.5, -0.8) * u, p + Vector2(0.4, 0.8) * u, Color(1, 0.85, 0.3, 0.95), u * 0.2)
+			c.draw_colored_polygon(PackedVector2Array([p + Vector2(-0.3, -0.05) * u, p + Vector2(0.3, -0.05) * u, p + Vector2(0, 0.6) * u]), Color(0.95, 0.2, 0.2))
+			c.draw_circle(p + Vector2(0, -0.2) * u, u * 0.34, Color(0.95, 0.2, 0.2))
+			c.draw_circle(p + Vector2(0, -0.2) * u, u * 0.13, Color.WHITE)
+		"mycar":
+			g._icon(c, "car", p, u * 0.5)
+		"guns":
+			g._icon(c, "guns", p, u * 0.5)
+		"taxi":
+			_glyph(c, "taxi", p, u * 0.55)
+		"clk":
+			var t := Time.get_time_dict_from_system()
+			var dk := Color(0.1, 0.1, 0.12)
+			c.draw_circle(p, u * 0.8, Color.WHITE)
+			for k in 12:
+				var a3 := float(k) * TAU / 12.0
+				var dv := Vector2(sin(a3), -cos(a3))
+				c.draw_line(p + dv * u * 0.66, p + dv * u * 0.74, dk, 1.5)
+			var ha := (float(int(t["hour"]) % 12) + float(t["minute"]) / 60.0) / 12.0 * TAU
+			var ma := float(t["minute"]) / 60.0 * TAU
+			var sa := float(t["second"]) / 60.0 * TAU
+			c.draw_line(p, p + Vector2(sin(ha), -cos(ha)) * u * 0.42, dk, 2.5)
+			c.draw_line(p, p + Vector2(sin(ma), -cos(ma)) * u * 0.62, dk, 2.0)
+			c.draw_line(p, p + Vector2(sin(sa), -cos(sa)) * u * 0.66, Color(1, 0.55, 0.1), 1.2)
+		"store":
+			var w := Color.WHITE
+			c.draw_line(p + Vector2(0, -0.55) * u, p + Vector2(-0.5, 0.55) * u, w, u * 0.18)
+			c.draw_line(p + Vector2(0, -0.55) * u, p + Vector2(0.5, 0.55) * u, w, u * 0.18)
+			c.draw_line(p + Vector2(-0.3, 0.2) * u, p + Vector2(0.3, 0.2) * u, w, u * 0.16)
+		"chirp":
+			_glyph(c, "chat", p, u * 0.55)
+		"racer":
+			_glyph(c, "game", p, u * 0.55)
+
+
+func _tab_bar(c: Control) -> void:
+	c.draw_rect(Rect2(20, 780, 400, 74), Color(0.09, 0.09, 0.1, 0.97))
+	c.draw_line(Vector2(20, 780), Vector2(420, 780), Color(1, 1, 1, 0.12), 1.0)
+	var order := [1, 2, 0]
+	var keys := ["recents", "contacts", "keypad"]
+	for j in 3:
+		var tab: int = order[j]
+		var cx := 20.0 + 66.7 + float(j) * 133.3
+		var col := Color(0.25, 0.6, 1.0) if phone_tab == tab else Color(0.6, 0.6, 0.64)
+		var p := Vector2(cx, 802)
+		if tab == 1:
+			c.draw_arc(p, 10.0, 0.0, TAU, 20, col, 2.0, true)
+			c.draw_line(p, p + Vector2(0, -6), col, 2.0)
+			c.draw_line(p, p + Vector2(5, 2), col, 2.0)
+		elif tab == 2:
+			c.draw_circle(p + Vector2(0, -5), 5.0, col)
+			c.draw_arc(p + Vector2(0, 14), 10.0, PI, TAU, 12, col, 3.0, true)
+		else:
+			for ry in 3:
+				for rx in 3:
+					c.draw_circle(p + Vector2(float(rx - 1) * 7.0, float(ry - 1) * 7.0), 2.0, col)
+		_t(c, T(String(keys[j])), Vector2(cx, 826), 12, col)
+		hits.append({"r": Rect2(cx - 66.0, 782, 133, 54), "a": "ph_tab", "v": tab})
