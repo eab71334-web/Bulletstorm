@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GODOT_VERSION: "4.3"
-      ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
 
@@ -18,49 +17,78 @@ jobs:
           java-version: "17"
 
       - name: Prepare Android SDK (preinstalled on the runner)
+        shell: bash
         run: |
-          CT="$ANDROID_HOME/cmdline-tools"
-          ls "$ANDROID_HOME"
-          ls "$CT"
-          if [ ! -e "$CT/latest" ]; then
-            FIRST=$(ls "$CT" | head -1)
-            sudo ln -s "$CT/$FIRST" "$CT/latest"
-          fi
-          yes | "$CT/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$CT/latest/bin/sdkmanager" "platform-tools" "build-tools;34.0.0" "platforms;android-34" || true
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platform-tools" "build-tools;34.0.0" "platforms;android-34" "cmdline-tools;latest" > /dev/null
+          ls "$ANDROID_HOME" "$ANDROID_HOME/build-tools" "$ANDROID_HOME/platforms"
 
       - name: Download Godot and export templates
+        shell: bash
         run: |
-          curl -sL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
-          unzip -q godot.zip
-          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" godot
-          chmod +x godot
-          curl -sL -o tpz.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
-          unzip -q tpz.zip -d tpz
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
           mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
-          mv tpz/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -d tpl
+          mv tpl/templates/* "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
 
       - name: Debug keystore and editor settings
+        shell: bash
         run: |
-          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
-          mkdir -p "$HOME/.config/godot"
-          printf '%s\n' '[gd_resource type="EditorSettings" format=3]' '' '[resource]' \
-            "export/android/android_sdk_path = \"$ANDROID_HOME\"" \
-            "export/android/java_sdk_path = \"$JAVA_HOME\"" \
-            "export/android/debug_keystore = \"$GITHUB_WORKSPACE/debug.keystore\"" \
-            'export/android/debug_keystore_user = "androiddebugkey"' \
-            'export/android/debug_keystore_pass = "android"' \
-            > "$HOME/.config/godot/editor_settings-4.tres"
+          mkdir -p "$HOME/.android" "$HOME/.config/godot"
+          keytool -genkey -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          cat > "$HOME/.config/godot/editor_settings-4.3.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${ANDROID_HOME}"
+          export/android/java_sdk_path = "${JAVA_HOME}"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          export/android/shutdown_adb_on_exit = true
+          EOF
+
+      - name: Fix project settings for Android
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re
+          key = "textures/vram_compression/import_etc2_astc=true"
+          s = open("project.godot").read()
+          if "import_etc2_astc" in s:
+              s = re.sub(r"textures/vram_compression/import_etc2_astc=.*", key, s)
+          elif "[rendering]" in s:
+              s = s.replace("[rendering]\n", "[rendering]\n\n" + key + "\n", 1)
+          else:
+              s += "\n[rendering]\n\n" + key + "\n"
+          open("project.godot", "w").write(s)
+          PY
+          sed -i 's#gradle_build/use_gradle_build=.*#gradle_build/use_gradle_build=false#' export_presets.cfg
+          sed -i 's#architectures/arm64-v8a=.*#architectures/arm64-v8a=true#' export_presets.cfg
+          echo "--- gdextension files:"
+          find . -name "*.gdextension" -not -path "./.godot/*" || true
 
       - name: Import Godot assets
-        run: ./godot --headless --import || true
+        shell: bash
+        run: godot --headless --path . --import || true
 
       - name: Export APK
+        shell: bash
         run: |
           mkdir -p build/android
-          ./godot --headless --export-debug "Android" build/android/game.apk
+          godot --headless --verbose --path . --export-debug "Android" build/android/TowerWars.apk 2>&1 | tee export.log
+          echo "================ CONFIG ERRORS ================"
+          grep -n -B1 -A10 "configuration errors" export.log || true
+          test -f build/android/TowerWars.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: build/android/game.apk
+          name: TowerWars-apk
+          path: build/android/TowerWars.apk
