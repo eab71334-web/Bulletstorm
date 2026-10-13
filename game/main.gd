@@ -343,6 +343,7 @@ var anim_files := 0
 var anim_total := 0
 var anim_kept := 0
 var anim_src := {}
+var anim_rest := {}
 var anim_cache := {}
 var anim_flags := {}
 var anim_stats := {}
@@ -1046,10 +1047,35 @@ func _load_anim_sources() -> void:
 			if best != null:
 				anim_src[key] = best
 				anim_files += 1
+				var ssk := _find_skeleton(inst)
+				if ssk != null:
+					anim_rest[key] = _capture_rest(ssk, inst)
 		inst.free()
 
 
-func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String) -> Dictionary:
+# ---- rest pose data: lets us retarget animations between skeletons with different bone axes
+func _chain_rot(n: Node, top: Node) -> Quaternion:
+	var q := Quaternion.IDENTITY
+	var cur := n
+	while cur != null:
+		if cur is Node3D:
+			q = (cur as Node3D).transform.basis.orthonormalized().get_rotation_quaternion() * q
+		if cur == top:
+			break
+		cur = cur.get_parent()
+	return q
+
+
+func _capture_rest(sk: Skeleton3D, top: Node) -> Dictionary:
+	var info := {}
+	for i in sk.get_bone_count():
+		var loc := sk.get_bone_rest(i).basis.orthonormalized().get_rotation_quaternion()
+		var glob := sk.get_bone_global_rest(i).basis.orthonormalized().get_rotation_quaternion()
+		info[canon(sk.get_bone_name(i))] = [loc, glob]
+	return {"rot": _chain_rot(sk, top), "b": info}
+
+
+func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String, top: Node = null) -> Dictionary:
 	var result := {}
 	if sk == null or anim_src.is_empty():
 		return result
@@ -1064,17 +1090,25 @@ func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String) -> Dictionary:
 		return result
 
 	var base := ap.get_node(ap.root_node)
+	if top == null:
+		top = base
 	var sk_path := str(base.get_path_to(sk))
 	var bone_map := {}
 	for i in sk.get_bone_count():
 		var bn := sk.get_bone_name(i)
 		bone_map[canon(bn)] = bn
+	var tinfo := _capture_rest(sk, top)
+	var trot: Quaternion = tinfo["rot"]
+	var tb: Dictionary = tinfo["b"]
 	var store := {}
 	var flags := {}
 	var stats := {}
 	var misses := {}
 	for k in anim_src.keys():
 		var anim := (anim_src[k] as Animation).duplicate() as Animation
+		var srest: Dictionary = anim_rest.get(k, {})
+		var sb: Dictionary = srest.get("b", {})
+		var srot: Quaternion = srest.get("rot", Quaternion.IDENTITY)
 		var tot := anim.get_track_count()
 		var arm_n := 0
 		var leg_n := 0
@@ -1096,6 +1130,19 @@ func _retarget(ap: AnimationPlayer, sk: Skeleton3D, ckey: String) -> Dictionary:
 				arm_n += 1
 			elif nb in ["rupleg", "lupleg", "rleg", "lleg"]:
 				leg_n += 1
+			if sb.has(nb) and tb.has(nb):
+				var s_arr: Array = sb[nb]
+				var t_arr: Array = tb[nb]
+				var s_loc: Quaternion = s_arr[0]
+				var s_world: Quaternion = srot * (s_arr[1] as Quaternion)
+				var t_loc: Quaternion = t_arr[0]
+				var t_world: Quaternion = trot * (t_arr[1] as Quaternion)
+				for ki in anim.track_get_key_count(t):
+					var qv: Quaternion = anim.track_get_key_value(t, ki)
+					var d_local := s_loc.inverse() * qv
+					var d_world := s_world * d_local * s_world.inverse()
+					var d_t := t_world.inverse() * d_world * t_world
+					anim.track_set_key_value(t, ki, (t_loc * d_t).normalized())
 			anim.track_set_path(t, NodePath(sk_path + ":" + String(bone_map[nb])))
 		var kept := anim.get_track_count()
 		var arms := arm_n >= 2
@@ -1163,7 +1210,7 @@ func _setup_anim(p: Ped, root: Node3D, ckey: String) -> void:
 	_set_loop(p.anim, p.a_walk)
 	_set_loop(p.anim, p.a_run)
 	_set_loop(p.anim, p.a_idle)
-	var res := _retarget(p.anim, sk, ckey)
+	var res := _retarget(p.anim, sk, ckey, root.get_child(0) if root.get_child_count() > 0 else root)
 	if not res.is_empty():
 		p.anims = res
 		var g := String(res.get("0_idle", ""))
@@ -1801,7 +1848,7 @@ func _build_glb() -> void:
 	a_aim = _find_anim(anim_player, ["aim", "shoot", "fire", "pistol", "rifle", "gun"])
 	for n in [a_idle, a_walk, a_run, a_aim]:
 		_set_loop(anim_player, n)
-	weapon_anims = _retarget(anim_player, char_skeleton, "player")
+	weapon_anims = _retarget(anim_player, char_skeleton, "player", holder.get_child(0))
 	var g := _wa(0, "idle")
 	if g != "":
 		a_idle = g
