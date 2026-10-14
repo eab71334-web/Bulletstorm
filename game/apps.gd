@@ -48,7 +48,10 @@ const HOME_GRID := [
 	{"app": 2, "key": "guns", "c1": Color(1.0, 0.78, 0.25), "c2": Color(1.0, 0.5, 0.05)},
 	{"app": 3, "key": "taxi", "c1": Color(1.0, 0.82, 0.2), "c2": Color(0.95, 0.6, 0.05)},
 	{"app": 6, "key": "clk", "c1": Color(0.16, 0.16, 0.18), "c2": Color(0.0, 0.0, 0.0)},
-	{"app": 7, "key": "store", "c1": Color(0.3, 0.75, 1.0), "c2": Color(0.05, 0.4, 0.95)},
+	{"app": 12, "key": "carshop", "c1": Color(1.0, 0.45, 0.4), "c2": Color(0.8, 0.12, 0.18)},
+	{"app": 13, "key": "gunshop", "c1": Color(0.42, 0.42, 0.48), "c2": Color(0.12, 0.12, 0.15)},
+	{"app": 14, "key": "airshop", "c1": Color(0.45, 0.8, 1.0), "c2": Color(0.1, 0.45, 0.9)},
+	{"app": 15, "key": "appstore", "c1": Color(0.3, 0.75, 1.0), "c2": Color(0.05, 0.4, 0.95)},
 	{"app": 10, "key": "chirp", "c1": Color(0.45, 0.85, 1.0), "c2": Color(0.1, 0.55, 0.95)},
 	{"app": 11, "key": "racer", "c1": Color(1.0, 0.4, 0.4), "c2": Color(0.75, 0.1, 0.2)},
 ]
@@ -76,7 +79,23 @@ const TXT := {
 	"tr": {"camera": "Kamera", "photos": "Fotoğraflar", "clock": "Saat", "store": "Mağaza", "settings": "Ayarlar", "photo": "FOTO", "video": "VİDEO", "slow": "YAVAŞ", "normal": "NORMAL", "fast": "HIZLI", "save": "KAYDET", "delete": "SİL", "wallpaper": "Duvar kâğıdı", "language": "Dil", "buy": "SATIN AL", "owned": "SAHİP", "select": "SEÇ", "selected": "SEÇİLİ", "cars": "ARABALAR", "ammo": "MERMİ", "air": "HAVA", "apps": "UYGULAMA", "alarm": "Alarm", "stopwatch": "Kronometre", "timer": "Zamanlayıcı", "clk": "Saat", "start": "BAŞLAT", "stop": "DURDUR", "lap": "TUR", "reset": "SIFIRLA", "add": "+ ALARM", "ring": "ALARM!", "edit": "DÜZENLE", "bright": "Parlaklık", "contrast": "Kontrast", "satur": "Doygunluk", "bw": "S/B", "sepia": "Sepya", "warm": "Sıcak", "cool": "Soğuk", "vivid": "Canlı", "rotate": "DÖNDÜR", "flip": "ÇEVİR", "size": "BOYUT", "undo": "GERİ AL", "saved": "Kaydedildi", "empty": "Henüz yok", "nomoney": "Yetersiz bakiye", "bought": "Satın alındı", "setwp": "DUVAR", "soon": "YAKINDA", "shadows": "Gölgeler", "fps": "FPS göster", "volume": "Ses", "on": "AÇIK", "off": "KAPALI", "gallery": "Galeri", "pickwp": "Duvar kâğıdı seç", "flysoon": "Uçuş: sonraki güncelleme", "dismiss": "KAPAT", "back": "Geri", "photocam": "ARKA", "selfie": "ÖN", "map": "Harita", "mycar": "Arabam", "guns": "Silahlar", "taxi": "Taksi", "chirp": "Chirp", "racer": "Yarış", "phone": "Telefon", "keypad": "Tuş takımı", "recents": "Son", "contacts": "Kişiler", "calling": "Aranıyor...", "connected": "Bağlandı", "end": "BİTİR", "police": "Polis", "ambulance": "Ambulans", "fire": "İtfaiye", "mechanic": "Tamirci", "boss": "Patron", "sara": "Sara", "noanswer": "Cevap yok", "wrong": "Yanlış numara", "dispatched": "Polis gönderildi", "healed": "Sağlık ekibi tedavi etti", "fdispatched": "İtfaiye haberdar", "onway": "Yolda", "phonesize": "Boyut"},
 }
 
+const TXT2 := {
+	"en": {"carshop": "Car Shop", "gunshop": "Gun Shop", "airshop": "Air Shop", "appstore": "App Store", "call": "CALL"},
+	"ar": {"carshop": "معرض السيارات", "gunshop": "متجر الأسلحة", "airshop": "متجر الطيران", "appstore": "متجر التطبيقات", "call": "استدعاء"},
+	"fr": {"carshop": "Concession", "gunshop": "Armurerie", "airshop": "Aviation", "appstore": "App Store", "call": "APPELER"},
+	"es": {"carshop": "Concesionario", "gunshop": "Armería", "airshop": "Aviación", "appstore": "App Store", "call": "LLAMAR"},
+	"tr": {"carshop": "Oto Galeri", "gunshop": "Silah Dükkanı", "airshop": "Havacılık", "appstore": "App Store", "call": "ÇAĞIR"},
+}
+
 var g
+var home_hits: Array = []
+var app_hits: Array = []
+var icon_rects := {}
+var icon_meta := {}
+var app_t := 0.0
+var app_dir := 0
+var app_from := Rect2(188, 418, 64, 64)
+var app_icon_id := -1
 var app := -1
 var page := ""
 var hits: Array = []
@@ -209,8 +228,16 @@ func _ready() -> void:
 
 func T(k: String) -> String:
 	var d: Dictionary = TXT.get(lang, TXT["en"])
+	if d.has(k):
+		return String(d[k])
+	var d2: Dictionary = TXT2.get(lang, TXT2["en"])
+	if d2.has(k):
+		return String(d2[k])
 	var en: Dictionary = TXT["en"]
-	return String(d.get(k, en.get(k, k)))
+	if en.has(k):
+		return String(en[k])
+	var en2: Dictionary = TXT2["en"]
+	return String(en2.get(k, k))
 
 
 func _setup_font() -> void:
@@ -440,7 +467,8 @@ func _process(delta: float) -> void:
 	if inf_money:
 		money = INF_MONEY
 	if app != -1 and not g.phone_open:
-		close_app()
+		_close_now()
+	_step_app_anim(delta)
 	if gain_t > 0.0:
 		gain_t -= delta
 	save_t += delta
@@ -515,9 +543,17 @@ func _stop_ring() -> void:
 
 
 func open_app(i: int) -> void:
+	var was_open := app != -1
 	app = i
 	page = ""
 	pick_mode = false
+	if not was_open:
+		app_icon_id = i
+		app_from = icon_rects.get(i, Rect2(188, 418, 64, 64))
+		app_t = 0.0
+		app_dir = 1
+	elif app_dir < 0:
+		app_dir = 1
 	if i == 4:
 		sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		_update_cam_rig()
@@ -526,22 +562,98 @@ func open_app(i: int) -> void:
 		gal_page = 0
 	elif i == 6:
 		clock_tab = 0
-	elif i == 7:
-		store_tab = 0
+	elif i >= 12 and i <= 15:
 		store_page = 0
 	elif i == 9:
 		phone_tab = 0
 
 
 func close_app() -> void:
+	if app == -1 or app_dir < 0:
+		return
+	if recording:
+		_stop_rec()
+	page = ""
+	pick_mode = false
+	if dirty:
+		_save()
+	if g.phone_open:
+		app_dir = -1
+		app_t = 1.0 if app_dir >= 0 else app_t
+	else:
+		_close_now()
+
+
+func _close_now() -> void:
 	if recording:
 		_stop_rec()
 	sv.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	app = -1
 	page = ""
 	pick_mode = false
+	app_dir = 0
+	app_t = 0.0
 	if dirty:
 		_save()
+
+
+func _step_app_anim(delta: float) -> void:
+	if app_dir == 0:
+		return
+	var rd := delta / maxf(Engine.time_scale, 0.05)
+	if app_dir > 0:
+		app_t += rd / 0.42
+		if app_t >= 1.0:
+			app_t = 1.0
+			app_dir = 0
+	else:
+		app_t -= rd / 0.34
+		if app_t <= 0.0:
+			_close_now()
+
+
+func app_visible() -> bool:
+	return app != -1
+
+
+func app_e() -> float:
+	if app == -1:
+		return 0.0
+	var t := clampf(app_t, 0.0, 1.0)
+	if app_dir >= 0:
+		return 1.0 - pow(1.0 - t, 3.0)
+	return t * t * (3.0 - 2.0 * t)
+
+
+func anim_rect() -> Rect2:
+	var e := app_e()
+	var full := Rect2(20, 20, 400, 860)
+	return Rect2(app_from.position.lerp(full.position, e), app_from.size.lerp(full.size, e))
+
+
+func anim_radius() -> float:
+	return lerpf(app_from.size.x * 0.225, 46.0, app_e())
+
+
+func draw_home_dim(c: Control) -> void:
+	var e := app_e()
+	if e > 0.0:
+		c.draw_rect(Rect2(20, 20, 400, 860), Color(0, 0, 0, e * 0.45))
+
+
+func draw_launch_overlay(c: Control) -> void:
+	var al := clampf(1.0 - app_e() * 2.2, 0.0, 1.0)
+	if al <= 0.0 or not icon_meta.has(app_icon_id):
+		return
+	var it: Dictionary = icon_meta[app_icon_id]
+	var c1: Color = it["c1"]
+	var c2: Color = it["c2"]
+	c1.a = al
+	c2.a = al
+	var s := c.size
+	c.draw_polygon(PackedVector2Array([Vector2.ZERO, Vector2(s.x, 0), s, Vector2(0, s.y)]), PackedColorArray([c1, c1, c2, c2]))
+	if al > 0.5:
+		_ios_glyph(c, String(it["key"]), s * 0.5, minf(s.x, s.y) * 0.5)
 
 
 func _back() -> void:
@@ -565,14 +677,17 @@ func _back() -> void:
 # ---------------------------------------------------------------- touch / actions
 
 func touch(lp: Vector2) -> void:
+	if app_dir != 0:
+		return
 	if lp.y > 836.0 and absf(lp.x - 220.0) < 90.0:
 		if app == -1:
 			g._set_phone(false)
 		else:
 			_back()
 		return
-	for i in range(hits.size() - 1, -1, -1):
-		var h: Dictionary = hits[i]
+	var hs: Array = app_hits if app != -1 else home_hits
+	for i in range(hs.size() - 1, -1, -1):
+		var h: Dictionary = hs[i]
 		if (h["r"] as Rect2).has_point(lp):
 			var val = h["v"]
 			if h.has("s"):
@@ -583,7 +698,7 @@ func touch(lp: Vector2) -> void:
 
 
 func _open_home(i: int) -> void:
-	if i >= 10:
+	if i == 10 or i == 11:
 		g._toast(T("soon"), 1.5)
 	elif i <= 3:
 		g._phone_app(i)
@@ -774,6 +889,9 @@ func _act(a: String, v) -> void:
 			_start_call(String(r["n"]), String(r["num"]), String(r["k"]), r["c"], String(r.get("ic", r["k"])))
 		"end_call":
 			_end_call()
+		"call_heli":
+			g._set_phone(false)
+			g.spawn_heli()
 		"page_set":
 			page = String(v)
 		"back_page":
@@ -1522,16 +1640,18 @@ func _draw_alarms(c: Control) -> void:
 
 # ---------------------------------------------------------------- store app
 
-func _store_items() -> Array:
+func _shop_items(aid: int) -> Array:
 	var out: Array = []
-	if store_tab == 0:
+	if aid == 12:
 		for cc in CARS:
 			out.append({"k": "car", "id": cc["id"], "name": cc["name"], "price": cc["price"], "color": cc["color"], "spd": cc["spd"], "acc": cc["acc"], "hnd": cc["hnd"]})
-	elif store_tab == 1:
+	elif aid == 13:
 		for i in AMMO.size():
 			out.append({"k": "ammo", "idx": i, "name": AMMO[i]["name"], "price": AMMO[i]["price"], "n": AMMO[i]["n"], "color": Color(0.95, 0.7, 0.2)})
-	elif store_tab == 2:
+	elif aid == 14:
 		out.append({"k": "heli", "id": "heli", "name": "HELICOPTER", "price": 90000, "color": Color(0.3, 0.5, 0.95)})
+		out.append({"k": "soon", "name": "JET", "price": 0, "color": Color(0.5, 0.5, 0.6)})
+		out.append({"k": "soon", "name": "DRONE", "price": 0, "color": Color(0.5, 0.5, 0.6)})
 	else:
 		for s in SOON_APPS:
 			out.append({"k": "soon", "name": s, "price": 0, "color": Color(0.5, 0.5, 0.6)})
@@ -1544,22 +1664,15 @@ func _stat(c: Control, p: Vector2, label: String, val: float) -> void:
 	c.draw_rect(Rect2(p.x + 30, p.y - 3, 84.0 * clampf(val, 0.0, 1.0), 6), Color(0.35, 0.8, 1.0))
 
 
-func _draw_store(c: Control) -> void:
-	_title(c, "store")
+func _draw_shop(c: Control) -> void:
+	var tkeys := {12: "carshop", 13: "gunshop", 14: "airshop", 15: "appstore"}
+	_title(c, String(tkeys.get(app, "store")))
 	var rtl := lang == "ar"
 	var mp := Rect2(30.0 if rtl else 298.0, 106, 112, 36)
 	c.draw_style_box(sbs[4], mp)
 	_t(c, _fmt(money), mp.position + mp.size * 0.5, 16 if money < 100000000 else 12, Color(1, 0.85, 0.3))
-	var keys := ["cars", "ammo", "air", "apps"]
-	c.draw_style_box(_sq(Color(0.45, 0.45, 0.5, 0.35), 9, false), Rect2(30, 160, 380, 36))
-	for i in 4:
-		var sr := Rect2(32.0 + float(i) * 94.5, 162, 94, 32)
-		if store_tab == i:
-			c.draw_style_box(_sq(Color(0.6, 0.6, 0.66, 0.95), 7, false), sr)
-		_t(c, T(String(keys[i])), sr.position + sr.size * 0.5, 14)
-		hits.append({"r": sr, "a": "store_tab", "v": i})
-	var items := _store_items()
-	var per := 4
+	var items := _shop_items(app)
+	var per := 5
 	var pages := maxi((items.size() - 1) / per + 1, 1)
 	store_page = clampi(store_page, 0, pages - 1)
 	for k in per:
@@ -1567,26 +1680,34 @@ func _draw_store(c: Control) -> void:
 		if idx >= items.size():
 			break
 		var it: Dictionary = items[idx]
-		var r2 := Rect2(30, 208 + k * 118, 380, 112)
+		var r2 := Rect2(30, 162 + k * 108, 380, 104)
 		var col: Color = it["color"]
 		var kind := String(it["k"])
-		var ic := Rect2(r2.position + Vector2(6, 16), Vector2(80, 80))
-		_rr_grad(c, ic, 18.0, col.lightened(0.25), col.darkened(0.35))
-		g._icon(c, "guns" if kind == "ammo" else "car", ic.position + ic.size * 0.5, 20.0)
-		_t(c, String(it["name"]), r2.position + Vector2(100, 28), 18, Color.WHITE, 0)
-		c.draw_line(Vector2(30, r2.end.y + 3), Vector2(410, r2.end.y + 3), Color(1, 1, 1, 0.1), 1.0)
-		var br := Rect2(r2.end.x - 104, r2.position.y + 40, 96, 34)
+		var ic := Rect2(r2.position + Vector2(6, 14), Vector2(76, 76))
+		_rr_grad(c, ic, 17.0, col.lightened(0.25), col.darkened(0.35))
+		if kind == "soon":
+			_t(c, String(it["name"]).substr(0, 1), ic.position + ic.size * 0.5, 34)
+		else:
+			var gk := "car"
+			if kind == "ammo":
+				gk = "guns"
+			elif kind == "heli":
+				gk = "heli"
+			g._icon(c, gk, ic.position + ic.size * 0.5, 20.0)
+		_t(c, String(it["name"]), r2.position + Vector2(96, 26), 18, Color.WHITE, 0)
+		c.draw_line(Vector2(30, r2.end.y + 1), Vector2(410, r2.end.y + 1), Color(1, 1, 1, 0.1), 1.0)
+		var br := Rect2(r2.end.x - 104, r2.position.y + 36, 96, 34)
 		if kind == "soon":
 			_capsule(c, br, T("soon"), "", null, 2, false)
 			continue
 		if kind == "car":
-			_stat(c, r2.position + Vector2(100, 52), "SPD", float(it["spd"]))
-			_stat(c, r2.position + Vector2(100, 66), "ACC", float(it["acc"]))
-			_stat(c, r2.position + Vector2(100, 80), "HND", float(it["hnd"]))
+			_stat(c, r2.position + Vector2(96, 48), "SPD", float(it["spd"]))
+			_stat(c, r2.position + Vector2(96, 62), "ACC", float(it["acc"]))
+			_stat(c, r2.position + Vector2(96, 76), "HND", float(it["hnd"]))
 		if kind == "ammo":
-			_t(c, "+%d" % int(it["n"]), r2.position + Vector2(100, 60), 22, Color(1, 0.85, 0.3), 0)
+			_t(c, "+%d" % int(it["n"]), r2.position + Vector2(96, 62), 22, Color(1, 0.85, 0.3), 0)
 		if kind == "heli":
-			_t(c, T("flysoon"), r2.position + Vector2(100, 60), 12, Color(1, 1, 1, 0.55), 0)
+			_t(c, "$ %s" % _fmt(int(it["price"])).trim_prefix("$"), r2.position + Vector2(96, 62), 14, Color(1, 1, 1, 0.55), 0)
 		var price := int(it["price"])
 		var can := money >= price
 		var plabel := "FREE" if price == 0 else _fmt(price)
@@ -1594,7 +1715,7 @@ func _draw_store(c: Control) -> void:
 			_capsule(c, br, plabel, "buy_ammo", int(it["idx"]), 0, can)
 		elif kind == "heli":
 			if bool(owned.get("heli", false)):
-				_capsule(c, br, T("owned"), "", null, 2, false)
+				_capsule(c, br, T("call"), "call_heli", null, 1, true)
 			else:
 				_capsule(c, br, plabel, "buy_heli", null, 0, can)
 		else:
@@ -1607,9 +1728,9 @@ func _draw_store(c: Control) -> void:
 			else:
 				_capsule(c, br, plabel, "buy_car", id, 0, can)
 	if pages > 1:
-		_btn(c, Rect2(60, 712, 100, 38), "<", "store_prev", null, 0, 22)
-		_t(c, "%d / %d" % [store_page + 1, pages], Vector2(220, 731), 18)
-		_btn(c, Rect2(280, 712, 100, 38), ">", "store_next", null, 0, 22)
+		_btn(c, Rect2(60, 716, 100, 38), "<", "store_prev", null, 0, 22)
+		_t(c, "%d / %d" % [store_page + 1, pages], Vector2(220, 735), 18)
+		_btn(c, Rect2(280, 716, 100, 38), ">", "store_next", null, 0, 22)
 
 
 # ---------------------------------------------------------------- settings app
@@ -1734,6 +1855,7 @@ func _icon_tex(key: String) -> Texture2D:
 # ---------------------------------------------------------------- drawing entry points
 
 func draw_home(c: Control) -> void:
+	hits = home_hits
 	hits.clear()
 	var t := Time.get_time_dict_from_system()
 	_t(c, "%02d:%02d" % [t["hour"], t["minute"]], Vector2(220, 175), 72)
@@ -1747,16 +1869,16 @@ func draw_home(c: Control) -> void:
 		hits.append({"r": Rect2(cc - Vector2(24, 24), Vector2(48, 48)), "a": "zoom", "v": 0.08 if sgn == 1 else -0.08})
 	for i in HOME_GRID.size():
 		var it: Dictionary = HOME_GRID[i]
-		var p := Vector2(84.0 + float(i % 4) * 91.0, 330.0 + float(i / 4) * 118.0)
-		_app_icon(c, p, 64.0, it, T(String(it["key"])), int(it["app"]) >= 10, true)
+		var p := Vector2(84.0 + float(i % 4) * 91.0, 316.0 + float(i / 4) * 118.0)
+		var soon := int(it["app"]) == 10 or int(it["app"]) == 11
+		_app_icon(c, p, 64.0, it, T(String(it["key"])), soon, true)
 	c.draw_style_box(sbs[7], Rect2(28, 748, 384, 98))
 	for i in HOME_DOCK.size():
 		var it2: Dictionary = HOME_DOCK[i]
 		_app_icon(c, Vector2(84.0 + float(i) * 91.0, 797.0), 64.0, it2, "", false, false)
 
 
-func draw_bg(c: Control) -> void:
-	# الخلفية تملأ الشاشة كلها (الأركان المدورة تغطيها إطار الهاتف)
+func draw_bg(c: Control, dark: bool = true) -> void:
 	var r := Rect2(20, 20, 400, 860)
 	if wall_tex != null:
 		var ts := wall_tex.get_size()
@@ -1767,11 +1889,12 @@ func draw_bg(c: Control) -> void:
 	else:
 		var w: Array = WALLS[clampi(wall_idx, 0, WALLS.size() - 1)]
 		_grad(c, r, w[0], w[1])
-	if app != -1:
+	if dark and app != -1:
 		c.draw_rect(r, Color(0, 0, 0, 0.8))
 
 
 func draw(c: Control) -> void:
+	hits = app_hits
 	hits.clear()
 	match app:
 		4:
@@ -1780,12 +1903,12 @@ func draw(c: Control) -> void:
 			_draw_photos(c)
 		6:
 			_draw_clock(c)
-		7:
-			_draw_store(c)
 		8:
 			_draw_settings(c)
 		9:
 			_draw_phone_app(c)
+		12, 13, 14, 15:
+			_draw_shop(c)
 
 
 func draw_hud(ui: Control) -> void:
@@ -1904,6 +2027,8 @@ func _app_icon(c: Control, p: Vector2, sz: float, it: Dictionary, label: String,
 	var r := Rect2(p - Vector2(half, half), Vector2(sz, sz))
 	var rad := sz * 0.225
 	var key := String(it["key"])
+	icon_rects[int(it["app"])] = r
+	icon_meta[int(it["app"])] = it
 	c.draw_style_box(_sq(Color(0, 0, 0, 0.35), int(rad), false), Rect2(r.position + Vector2(0, 4), r.size))
 	var tex := _icon_tex(key)
 	if tex != null:
@@ -1981,6 +2106,20 @@ func _ios_glyph(c: Control, key: String, p: Vector2, u: float) -> void:
 			c.draw_line(p + Vector2(-0.3, 0.2) * u, p + Vector2(0.3, 0.2) * u, w, u * 0.16)
 		"chirp":
 			_glyph(c, "chat", p, u * 0.55)
+		"carshop":
+			g._icon(c, "car", p + Vector2(0, -0.1) * u, u * 0.45)
+			_t(c, "$", p + Vector2(0.55, 0.55) * u, int(u * 0.7), Color(1, 0.9, 0.3))
+		"gunshop":
+			g._icon(c, "guns", p + Vector2(0, -0.1) * u, u * 0.45)
+			_t(c, "$", p + Vector2(0.55, 0.55) * u, int(u * 0.7), Color(1, 0.9, 0.3))
+		"airshop":
+			g._icon(c, "heli", p + Vector2(0, -0.05) * u, u * 0.45)
+			_t(c, "$", p + Vector2(0.55, 0.55) * u, int(u * 0.7), Color(1, 0.9, 0.3))
+		"appstore":
+			var w2 := Color.WHITE
+			c.draw_line(p + Vector2(0, -0.55) * u, p + Vector2(-0.5, 0.55) * u, w2, u * 0.18)
+			c.draw_line(p + Vector2(0, -0.55) * u, p + Vector2(0.5, 0.55) * u, w2, u * 0.18)
+			c.draw_line(p + Vector2(-0.3, 0.2) * u, p + Vector2(0.3, 0.2) * u, w2, u * 0.16)
 		"racer":
 			_glyph(c, "game", p, u * 0.55)
 
