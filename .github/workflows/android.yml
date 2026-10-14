@@ -68,10 +68,21 @@ jobs:
               s = s.replace("[rendering]\n", "[rendering]\n\n" + key + "\n", 1)
           else:
               s += "\n[rendering]\n\n" + key + "\n"
+          if "driver/enable_input" in s:
+              s = re.sub(r"driver/enable_input=.*", "driver/enable_input=true", s)
+          elif "[audio]" in s:
+              s = s.replace("[audio]\n", "[audio]\n\ndriver/enable_input=true\n", 1)
+          else:
+              s += "\n[audio]\n\ndriver/enable_input=true\n"
           open("project.godot", "w").write(s)
           PY
           sed -i 's#gradle_build/use_gradle_build=.*#gradle_build/use_gradle_build=false#' export_presets.cfg
           sed -i 's#architectures/arm64-v8a=.*#architectures/arm64-v8a=true#' export_presets.cfg
+          sed -i 's#permissions/internet=.*#permissions/internet=true#' export_presets.cfg
+          sed -i 's#permissions/access_network_state=.*#permissions/access_network_state=true#' export_presets.cfg
+          sed -i 's#permissions/access_wifi_state=.*#permissions/access_wifi_state=true#' export_presets.cfg
+          sed -i 's#permissions/change_wifi_multicast_state=.*#permissions/change_wifi_multicast_state=true#' export_presets.cfg
+          sed -i 's#permissions/record_audio=.*#permissions/record_audio=true#' export_presets.cfg
           echo "--- gdextension files:"
           find . -name "*.gdextension" -not -path "./.godot/*" || true
 
