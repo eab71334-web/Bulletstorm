@@ -48,6 +48,7 @@ const HOME_GRID := [
 	{"app": 2, "key": "guns", "c1": Color(1.0, 0.78, 0.25), "c2": Color(1.0, 0.5, 0.05)},
 	{"app": 3, "key": "taxi", "c1": Color(1.0, 0.82, 0.2), "c2": Color(0.95, 0.6, 0.05)},
 	{"app": 6, "key": "clk", "c1": Color(0.16, 0.16, 0.18), "c2": Color(0.0, 0.0, 0.0)},
+	{"app": 16, "key": "messages", "c1": Color(0.45, 0.92, 0.42), "c2": Color(0.1, 0.72, 0.25)},
 	{"app": 12, "key": "carshop", "c1": Color(1.0, 0.45, 0.4), "c2": Color(0.8, 0.12, 0.18)},
 	{"app": 13, "key": "gunshop", "c1": Color(0.42, 0.42, 0.48), "c2": Color(0.12, 0.12, 0.15)},
 	{"app": 14, "key": "airshop", "c1": Color(0.45, 0.8, 1.0), "c2": Color(0.1, 0.45, 0.9)},
@@ -80,11 +81,11 @@ const TXT := {
 }
 
 const TXT2 := {
-	"en": {"carshop": "Car Shop", "gunshop": "Gun Shop", "airshop": "Air Shop", "appstore": "App Store", "call": "CALL"},
-	"ar": {"carshop": "معرض السيارات", "gunshop": "متجر الأسلحة", "airshop": "متجر الطيران", "appstore": "متجر التطبيقات", "call": "استدعاء"},
-	"fr": {"carshop": "Concession", "gunshop": "Armurerie", "airshop": "Aviation", "appstore": "App Store", "call": "APPELER"},
-	"es": {"carshop": "Concesionario", "gunshop": "Armería", "airshop": "Aviación", "appstore": "App Store", "call": "LLAMAR"},
-	"tr": {"carshop": "Oto Galeri", "gunshop": "Silah Dükkanı", "airshop": "Havacılık", "appstore": "App Store", "call": "ÇAĞIR"},
+	"en": {"carshop": "Car Shop", "gunshop": "Gun Shop", "airshop": "Air Shop", "appstore": "App Store", "call": "CALL", "messages": "Messages", "newmsg": "New message", "typemsg": "Message", "phonenum": "Phone number", "send": "SEND", "nomsg": "No messages yet", "incoming": "Incoming call", "accept": "ACCEPT", "decline": "DECLINE", "numnf": "Number not found", "busy": "Line busy", "declined": "Call declined", "callended": "Call ended", "mynumber": "My number", "mainmenu": "Main menu"},
+	"ar": {"carshop": "معرض السيارات", "gunshop": "متجر الأسلحة", "airshop": "متجر الطيران", "appstore": "متجر التطبيقات", "call": "استدعاء", "messages": "الرسائل", "newmsg": "رسالة جديدة", "typemsg": "اكتب رسالة", "phonenum": "رقم الهاتف", "send": "إرسال", "nomsg": "لا توجد رسائل", "incoming": "مكالمة واردة", "accept": "رد", "decline": "رفض", "numnf": "الرقم غير موجود", "busy": "الخط مشغول", "declined": "تم رفض المكالمة", "callended": "انتهت المكالمة", "mynumber": "رقمي", "mainmenu": "القائمة الرئيسية"},
+	"fr": {"carshop": "Concession", "gunshop": "Armurerie", "airshop": "Aviation", "appstore": "App Store", "call": "APPELER", "messages": "Messages", "newmsg": "Nouveau message", "typemsg": "Message", "phonenum": "Numéro", "send": "ENVOYER", "nomsg": "Aucun message", "incoming": "Appel entrant", "accept": "RÉPONDRE", "decline": "REFUSER", "numnf": "Numéro introuvable", "busy": "Ligne occupée", "declined": "Appel refusé", "callended": "Appel terminé", "mynumber": "Mon numéro", "mainmenu": "Menu principal"},
+	"es": {"carshop": "Concesionario", "gunshop": "Armería", "airshop": "Aviación", "appstore": "App Store", "call": "LLAMAR", "messages": "Mensajes", "newmsg": "Nuevo mensaje", "typemsg": "Mensaje", "phonenum": "Número", "send": "ENVIAR", "nomsg": "Sin mensajes", "incoming": "Llamada entrante", "accept": "CONTESTAR", "decline": "RECHAZAR", "numnf": "Número no encontrado", "busy": "Línea ocupada", "declined": "Llamada rechazada", "callended": "Llamada terminada", "mynumber": "Mi número", "mainmenu": "Menú principal"},
+	"tr": {"carshop": "Oto Galeri", "gunshop": "Silah Dükkanı", "airshop": "Havacılık", "appstore": "App Store", "call": "ÇAĞIR", "messages": "Mesajlar", "newmsg": "Yeni mesaj", "typemsg": "Mesaj", "phonenum": "Numara", "send": "GÖNDER", "nomsg": "Mesaj yok", "incoming": "Gelen arama", "accept": "CEVAPLA", "decline": "REDDET", "numnf": "Numara bulunamadı", "busy": "Hat meşgul", "declined": "Arama reddedildi", "callended": "Arama bitti", "mynumber": "Numaram", "mainmenu": "Ana menü"},
 }
 
 var g
@@ -96,6 +97,12 @@ var app_t := 0.0
 var app_dir := 0
 var app_from := Rect2(188, 418, 64, 64)
 var app_icon_id := -1
+var threads := {}
+var thread_order: Array = []
+var cur_thread := ""
+var friends := {}
+var call_net := false
+var call_peer := 0
 var app := -1
 var page := ""
 var hits: Array = []
@@ -488,11 +495,18 @@ func _process(delta: float) -> void:
 			_stop_ring()
 	if call_state == "ringing":
 		call_t += delta
-		if call_t >= 2.4:
+		if call_net:
+			if call_t > 30.0:
+				_end_call()
+		elif call_t >= 2.4:
 			_connect_call()
+	elif call_state == "incoming":
+		call_t += delta
+		if call_t > 30.0:
+			_end_call()
 	elif call_state == "connected":
 		call_t += delta
-		if call_t >= 5.0:
+		if not call_net and call_t >= 5.0:
 			_end_call()
 	if heal_t > 0.0:
 		heal_t -= delta
@@ -566,6 +580,8 @@ func open_app(i: int) -> void:
 		store_page = 0
 	elif i == 9:
 		phone_tab = 0
+	elif i == 16:
+		cur_thread = ""
 
 
 func close_app() -> void:
@@ -882,10 +898,35 @@ func _act(a: String, v) -> void:
 					return
 				_call_number(code)
 		"call_contact":
-			var ct: Dictionary = CONTACTS[int(v)]
-			_start_call(String(ct["name"]), String(ct["num"]), String(ct["kind"]), ct["col"], String(ct["icon"]))
+			var ct: Dictionary = _all_contacts()[int(v)]
+			if ct.has("pid") and g.net != null and g.net.active:
+				_start_net_call(String(ct["name"]), String(ct["num"]), int(ct["pid"]))
+			else:
+				_start_call(String(ct["name"]), String(ct["num"]), String(ct["kind"]), ct["col"], String(ct["icon"]))
+		"call_accept":
+			call_state = "connected"
+			call_t = 0.0
+			call_player.stop()
+			call_msg = T("connected")
+			g.net.send_srv("c_call_answer", {"from": call_peer, "ok": true})
+			g.net.voice_start(call_peer)
+		"call_decline":
+			_end_call()
+		"msg_open":
+			cur_thread = String(v)
+			page = "thread"
+			if threads.has(cur_thread):
+				threads[cur_thread]["unread"] = 0
+		"msg_send":
+			g.msg_send_current()
+		"open_menu":
+			g._set_phone(false)
+			g.open_menu()
 		"redial":
 			var r: Dictionary = recents[int(v)]
+			if String(r["k"]) == "player":
+				_call_number(String(r["num"]).replace("-", ""))
+				return
 			_start_call(String(r["n"]), String(r["num"]), String(r["k"]), r["c"], String(r.get("ic", r["k"])))
 		"end_call":
 			_end_call()
@@ -985,6 +1026,12 @@ func _contact_icon(c: Control, p: Vector2, r: float, col: Color, ic: String) -> 
 # ---------------------------------------------------------------- phone app (calls, contacts)
 
 func _call_number(num: String) -> void:
+	var dn: String = String(g.net.digits(num)) if g.net != null else num
+	if g.net != null and g.net.active:
+		var pid: int = g.net.find_by_number(dn)
+		if pid != 0 and pid != g.net.my_id:
+			_start_net_call(String(g.net.players[pid]["name"]), dn, pid)
+			return
 	for ct in CONTACTS:
 		if String(ct["num"]) == num:
 			_start_call(String(ct["name"]), num, String(ct["kind"]), ct["col"], String(ct["icon"]))
@@ -992,8 +1039,81 @@ func _call_number(num: String) -> void:
 	_start_call(num, num, "wrong", Color(0.5, 0.5, 0.58), "unknown")
 
 
+func _start_net_call(nm: String, number: String, pid: int) -> void:
+	_start_call(nm, _fmt_num(number), "player", _friend_col(number), "person")
+	call_net = true
+	call_peer = pid
+	g.net.send_srv("c_call_start", {"to": number})
+
+
+func incoming_call(from_id: int, nm: String, number: String) -> void:
+	if call_state != "":
+		g.net.send_srv("c_call_answer", {"from": from_id, "ok": false})
+		return
+	call_state = "incoming"
+	call_net = true
+	call_peer = from_id
+	call_name = nm
+	call_num = _fmt_num(number)
+	call_kind = "player"
+	call_ic = "person"
+	call_col = _friend_col(number)
+	call_t = 0.0
+	call_msg = ""
+	call_player.play()
+	g._set_phone(true)
+	if app != 9:
+		app = 9
+		app_t = 1.0
+		app_dir = 0
+		app_icon_id = 9
+
+
+func call_failed(why: String) -> void:
+	_end_call_local()
+	g._toast(T("numnf") if why == "nonumber" else T("busy"), 2.5)
+
+
+func call_result(ok: bool, _peer: int) -> void:
+	if call_state != "ringing":
+		return
+	if ok:
+		call_state = "connected"
+		call_t = 0.0
+		call_player.stop()
+		call_msg = T("connected")
+		g.net.voice_start(call_peer)
+	else:
+		_end_call_local()
+		g._toast(T("declined"), 2.5)
+
+
+func call_remote_ended() -> void:
+	if call_state != "":
+		_end_call_local()
+		g._toast(T("callended"), 2.5)
+
+
+func _end_call() -> void:
+	if call_net and call_state != "" and g.net != null:
+		if call_state == "incoming":
+			g.net.send_srv("c_call_answer", {"from": call_peer, "ok": false})
+		else:
+			g.net.send_srv("c_call_end", {"other": call_peer})
+	_end_call_local()
+
+
+func _end_call_local() -> void:
+	call_state = ""
+	call_net = false
+	call_player.stop()
+	if g.net != null:
+		g.net.voice_stop()
+
+
 func _start_call(key: String, num: String, kind: String, col: Color, ic: String) -> void:
 	call_state = "ringing"
+	call_net = false
 	call_name = key
 	call_num = num
 	call_kind = kind
@@ -1061,6 +1181,7 @@ func _draw_phone_app(c: Control) -> void:
 
 func _draw_keypad(c: Control) -> void:
 	_t(c, dial if dial != "" else " ", Vector2(220, 175), 40)
+	_t(c, "%s  %s" % [T("mynumber"), _fmt_num(my_number())], Vector2(220, 214), 14, Color(1, 1, 1, 0.5))
 	var digs := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#"]
 	var lets := ["", "ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ", "", "+", ""]
 	for i in 12:
@@ -1104,36 +1225,51 @@ func _draw_recents(c: Control) -> void:
 
 func _draw_contacts(c: Control) -> void:
 	_title(c, "contacts")
-	c.draw_style_box(sbs[8], Rect2(30, 170, 380, float(CONTACTS.size()) * 66.0))
-	for i in CONTACTS.size():
-		var ct: Dictionary = CONTACTS[i]
-		var r := Rect2(30, 170 + i * 66, 380, 66)
-		_contact_icon(c, r.position + Vector2(40, 33), 24.0, ct["col"], String(ct["icon"]))
-		_t(c, T(String(ct["name"])), r.position + Vector2(78, 24), 19, Color.WHITE, 0)
-		_t(c, String(ct["num"]), r.position + Vector2(78, 46), 14, Color(1, 1, 1, 0.55), 0)
-		var bp := r.position + Vector2(342, 33)
-		c.draw_circle(bp, 18.0, Color(0.2, 0.78, 0.35))
-		_glyph(c, "phone", bp, 9.0)
-		if i < CONTACTS.size() - 1:
-			c.draw_line(r.position + Vector2(78, 66), r.position + Vector2(380, 66), Color(1, 1, 1, 0.1), 1.0)
+	var all := _all_contacts()
+	c.draw_style_box(sbs[8], Rect2(30, 170, 380, float(all.size()) * 58.0))
+	for i in all.size():
+		var ct: Dictionary = all[i]
+		var r := Rect2(30, 170 + i * 58, 380, 58)
+		_contact_icon(c, r.position + Vector2(38, 29), 22.0, ct["col"], String(ct["icon"]))
+		_t(c, T(String(ct["name"])), r.position + Vector2(74, 21), 19, Color.WHITE, 0)
+		var shown := _fmt_num(String(ct["num"])) if ct.has("pid") else String(ct["num"])
+		_t(c, shown, r.position + Vector2(74, 42), 14, Color(1, 1, 1, 0.55), 0)
+		var bp := r.position + Vector2(346, 29)
+		c.draw_circle(bp, 17.0, Color(0.2, 0.78, 0.35))
+		_glyph(c, "phone", bp, 8.5)
+		if i < all.size() - 1:
+			c.draw_line(r.position + Vector2(74, 58), r.position + Vector2(380, 58), Color(1, 1, 1, 0.1), 1.0)
 		hits.append({"r": r, "a": "call_contact", "v": i})
 
 
 func _draw_call(c: Control) -> void:
 	_grad(c, Rect2(20, 20, 400, 860), call_col.darkened(0.55), Color(0.02, 0.02, 0.03))
 	var p := Vector2(220, 270)
-	if call_state == "ringing":
+	if call_state == "ringing" or call_state == "incoming":
 		for k in 2:
 			var rr := 70.0 + fmod(call_t * 40.0 + float(k) * 22.0, 44.0)
 			c.draw_arc(p, rr, 0.0, TAU, 40, Color(1, 1, 1, 0.3 - (rr - 70.0) / 44.0 * 0.3), 3.0, true)
 	_contact_icon(c, p, 58.0, call_col, call_ic)
 	_t(c, T(call_name), Vector2(220, 380), 34)
 	_t(c, call_num, Vector2(220, 420), 20, Color(1, 1, 1, 0.65))
+	if call_state == "incoming":
+		_t(c, T("incoming"), Vector2(220, 465), 22, Color(1, 1, 1, 0.85))
+		var ap := Vector2(130, 730)
+		var dp := Vector2(310, 730)
+		c.draw_circle(ap, 40.0, Color(0.2, 0.78, 0.35))
+		_glyph(c, "phone", ap, 18.0)
+		c.draw_circle(dp, 40.0, Color(0.95, 0.22, 0.2))
+		_t(c, T("decline"), dp + Vector2(0, 62), 14, Color(1, 1, 1, 0.8))
+		_t(c, T("accept"), ap + Vector2(0, 62), 14, Color(1, 1, 1, 0.8))
+		_t(c, "x", dp, 30)
+		hits.append({"r": Rect2(ap - Vector2(48, 48), Vector2(96, 96)), "a": "call_accept", "v": null})
+		hits.append({"r": Rect2(dp - Vector2(48, 48), Vector2(96, 96)), "a": "call_decline", "v": null})
+		return
 	if call_state == "ringing":
 		var dots := ".".repeat(1 + int(call_t * 2.0) % 3)
 		_t(c, T("calling").trim_suffix("...") + dots, Vector2(220, 465), 22, Color(1, 1, 1, 0.85))
 	else:
-		_t(c, "00:%02d" % int(call_t), Vector2(220, 465), 22, Color(0.5, 1, 0.6))
+		_t(c, "%02d:%02d" % [int(call_t) / 60, int(call_t) % 60], Vector2(220, 465), 22, Color(0.5, 1, 0.6))
 		_t(c, call_msg, Vector2(220, 515), 20, Color(1, 0.9, 0.5))
 	var ep := Vector2(220, 730)
 	c.draw_circle(ep, 40.0, Color(0.95, 0.22, 0.2))
@@ -1786,6 +1922,12 @@ func _draw_settings(c: Control) -> void:
 	c.draw_line(Vector2(80, 481), Vector2(410, 481), Color(1, 1, 1, 0.1), 1.0)
 	var sr := (float(g.phone_scale) - 0.5) / 0.55
 	_slider_row(c, 481, Color(0.55, 0.55, 0.6), "size", T("phonesize"), "%d%%" % int(float(g.phone_scale) * 100.0), sr, "size_set")
+	c.draw_style_box(sbs[8], Rect2(30, 566, 380, 100))
+	_set_icon(c, Vector2(56, 591), Color(0.2, 0.7, 0.4), "globe")
+	_t(c, T("mynumber"), Vector2(80, 591), 18, Color.WHITE, 0)
+	_t(c, _fmt_num(my_number()), Vector2(396, 591), 18, Color(0.4, 1, 0.55), 2)
+	c.draw_line(Vector2(80, 616), Vector2(410, 616), Color(1, 1, 1, 0.1), 1.0)
+	_set_row(c, 616, Color(0.55, 0.55, 0.6), "size", T("mainmenu"), "", "open_menu", null)
 
 
 # ---------------------------------------------------------------- glyphs and round icons
@@ -1872,6 +2014,12 @@ func draw_home(c: Control) -> void:
 		var p := Vector2(84.0 + float(i % 4) * 91.0, 316.0 + float(i / 4) * 118.0)
 		var soon := int(it["app"]) == 10 or int(it["app"]) == 11
 		_app_icon(c, p, 64.0, it, T(String(it["key"])), soon, true)
+	var unread := _unread_total()
+	if unread > 0 and icon_rects.has(16):
+		var r16: Rect2 = icon_rects[16]
+		var bp := Vector2(r16.end.x - 4.0, r16.position.y + 4.0)
+		c.draw_circle(bp, 12.0, Color(1, 0.25, 0.25))
+		_t(c, str(mini(unread, 99)), bp, 14)
 	c.draw_style_box(sbs[7], Rect2(28, 748, 384, 98))
 	for i in HOME_DOCK.size():
 		var it2: Dictionary = HOME_DOCK[i]
@@ -1909,6 +2057,8 @@ func draw(c: Control) -> void:
 			_draw_phone_app(c)
 		12, 13, 14, 15:
 			_draw_shop(c)
+		16:
+			_draw_messages(c)
 
 
 func draw_hud(ui: Control) -> void:
@@ -2106,6 +2256,8 @@ func _ios_glyph(c: Control, key: String, p: Vector2, u: float) -> void:
 			c.draw_line(p + Vector2(-0.3, 0.2) * u, p + Vector2(0.3, 0.2) * u, w, u * 0.16)
 		"chirp":
 			_glyph(c, "chat", p, u * 0.55)
+		"messages":
+			_glyph(c, "chat", p, u * 0.55)
 		"carshop":
 			g._icon(c, "car", p + Vector2(0, -0.1) * u, u * 0.45)
 			_t(c, "$", p + Vector2(0.55, 0.55) * u, int(u * 0.7), Color(1, 0.9, 0.3))
@@ -2147,3 +2299,188 @@ func _tab_bar(c: Control) -> void:
 					c.draw_circle(p + Vector2(float(rx - 1) * 7.0, float(ry - 1) * 7.0), 2.0, col)
 		_t(c, T(String(keys[j])), Vector2(cx, 826), 12, col)
 		hits.append({"r": Rect2(cx - 66.0, 782, 133, 54), "a": "ph_tab", "v": tab})
+
+
+# ---------------------------------------------------------------- players / messages
+
+func my_number() -> String:
+	return String(g.prof["number"])
+
+
+func _fmt_num(n: String) -> String:
+	return g.fmt_num(n)
+
+
+func _friend_col(num: String) -> Color:
+	var k := 0
+	if num.length() >= 8:
+		k = int(num.substr(4))
+	return Color.from_hsv(float(k % 360) / 360.0, 0.55, 0.9)
+
+
+func _all_contacts() -> Array:
+	var out: Array = []
+	for ct in CONTACTS:
+		out.append(ct)
+	for id in friends.keys():
+		var f: Dictionary = friends[id]
+		out.append({"name": f["name"], "num": f["number"], "kind": "player", "icon": "person", "col": _friend_col(String(f["number"])), "pid": id})
+	return out
+
+
+func friend_added(id: int, info: Dictionary) -> void:
+	friends[id] = {"name": String(info["name"]), "number": String(info["number"])}
+	receive_message(String(info["number"]), String(info["name"]), "Hi! It's %s. Save my number: %s" % [String(info["name"]), _fmt_num(String(info["number"]))])
+
+
+func friend_removed(id: int) -> void:
+	friends.erase(id)
+
+
+func _name_for(num: String) -> String:
+	for id in friends.keys():
+		if String(friends[id]["number"]) == num:
+			return String(friends[id]["name"])
+	return ""
+
+
+func _add_msg(number: String, nm: String, me: bool, text: String) -> void:
+	if not threads.has(number):
+		threads[number] = {"name": nm, "msgs": [], "unread": 0}
+	var th: Dictionary = threads[number]
+	if nm != "":
+		th["name"] = nm
+	var t := Time.get_time_dict_from_system()
+	(th["msgs"] as Array).push_front({"me": me, "t": text, "tm": "%02d:%02d" % [t["hour"], t["minute"]], "fail": false})
+	if not me and not (app == 16 and page == "thread" and cur_thread == number):
+		th["unread"] = int(th["unread"]) + 1
+	thread_order.erase(number)
+	thread_order.push_front(number)
+
+
+func receive_message(number: String, nm: String, text: String) -> void:
+	_add_msg(number, nm, false, text)
+	if shutter_player != null:
+		shutter_player.play()
+	g._toast("%s: %s" % [nm, text], 3.5)
+
+
+func send_text(text: String) -> void:
+	var t := text.strip_edges()
+	if t == "" or cur_thread == "":
+		return
+	_add_msg(cur_thread, "", true, t)
+	if g.net != null and g.net.active:
+		g.net.send_srv("c_msg", {"to": cur_thread, "text": t})
+	else:
+		msg_failed(cur_thread)
+
+
+func msg_failed(to: String) -> void:
+	if threads.has(to):
+		for m in (threads[to]["msgs"] as Array):
+			if bool(m["me"]):
+				m["fail"] = true
+				break
+
+
+func composer_info() -> Dictionary:
+	if app != 16 or app_dir != 0:
+		return {}
+	if page == "thread":
+		return {"rect": Rect2(30, 170, 296, 46), "ph": T("typemsg"), "num": false}
+	if page == "new":
+		return {"rect": Rect2(30, 180, 380, 52), "ph": T("phonenum"), "num": true}
+	return {}
+
+
+func compose_submit(text: String) -> void:
+	if page == "new":
+		var d: String = String(g.net.digits(text)) if g.net != null else text
+		if d.length() < 6:
+			g._toast(T("numnf"), 1.5)
+			return
+		cur_thread = d
+		if not threads.has(d):
+			threads[d] = {"name": _name_for(d), "msgs": [], "unread": 0}
+			thread_order.push_front(d)
+		page = "thread"
+	elif page == "thread":
+		send_text(text)
+
+
+func _unread_total() -> int:
+	var tot := 0
+	for k in threads.keys():
+		tot += int(threads[k]["unread"])
+	return tot
+
+
+func _draw_messages(c: Control) -> void:
+	c.draw_rect(Rect2(20, 20, 400, 860), Color(0, 0, 0, 0.35))
+	if page == "thread":
+		_draw_thread(c)
+		return
+	if page == "new":
+		_back_btn(c, T("messages"))
+		_title(c, "newmsg")
+		c.draw_style_box(_sq(Color(0.2, 0.2, 0.22), 26, false), Rect2(30, 180, 380, 52))
+		_capsule(c, Rect2(30, 248, 380, 46), T("send"), "msg_send", null, 1, true)
+		_t(c, T("mynumber") + "  " + _fmt_num(my_number()), Vector2(220, 330), 16, Color(1, 1, 1, 0.5))
+		return
+	cur_thread = ""
+	_title(c, "messages")
+	var rtl := lang == "ar"
+	_capsule(c, Rect2(30.0 if rtl else 322.0, 104, 88, 34), "+", "page_set", "new", 0, true)
+	var n := mini(thread_order.size(), 9)
+	if n == 0:
+		_t(c, T("nomsg"), Vector2(220, 340), 20, Color(1, 1, 1, 0.55))
+		return
+	c.draw_style_box(sbs[8], Rect2(30, 170, 380, float(n) * 64.0))
+	for i in n:
+		var num := String(thread_order[i])
+		var th: Dictionary = threads[num]
+		var r := Rect2(30, 170 + i * 64, 380, 64)
+		_contact_icon(c, r.position + Vector2(36, 32), 22.0, _friend_col(num), "person")
+		var nm := String(th["name"])
+		if nm == "":
+			nm = _fmt_num(num)
+		_t(c, nm, r.position + Vector2(74, 22), 18, Color.WHITE, 0)
+		var ms: Array = th["msgs"]
+		if not ms.is_empty():
+			_t(c, String(ms[0]["t"]).substr(0, 26), r.position + Vector2(74, 44), 14, Color(1, 1, 1, 0.55), 0)
+		if int(th["unread"]) > 0:
+			c.draw_circle(r.position + Vector2(362, 32), 9.0, Color(0.25, 0.6, 1.0))
+		if i < n - 1:
+			c.draw_line(r.position + Vector2(74, 64), r.position + Vector2(380, 64), Color(1, 1, 1, 0.1), 1.0)
+		hits.append({"r": r, "a": "msg_open", "v": num})
+
+
+func _draw_thread(c: Control) -> void:
+	var th: Dictionary = threads.get(cur_thread, {"name": "", "msgs": [], "unread": 0})
+	th["unread"] = 0
+	_back_btn(c, T("messages"))
+	var nm := String(th["name"])
+	if nm == "":
+		nm = _name_for(cur_thread)
+	if nm == "":
+		nm = _fmt_num(cur_thread)
+	_t(c, nm, Vector2(34, 128), 28, Color.WHITE, 0)
+	c.draw_style_box(_sq(Color(0.2, 0.2, 0.22), 23, false), Rect2(30, 170, 296, 46))
+	_capsule(c, Rect2(334, 170, 76, 46), T("send"), "msg_send", null, 1, true)
+	var f := _font()
+	var y := 236.0
+	for m in (th["msgs"] as Array):
+		var txt := String(m["t"])
+		var sz: Vector2 = f.get_multiline_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, 250.0, 18)
+		var bw := minf(sz.x + 26.0, 276.0)
+		var bh := sz.y + 18.0
+		if y + bh > 770.0:
+			break
+		var mine := bool(m["me"])
+		var bx := 410.0 - bw if mine else 30.0
+		c.draw_style_box(_sq(Color(0.04, 0.52, 1.0) if mine else Color(0.22, 0.22, 0.25), 18, false), Rect2(bx, y, bw, bh))
+		c.draw_multiline_string(f, Vector2(bx + 13.0, y + 9.0 + f.get_ascent(18)), txt, HORIZONTAL_ALIGNMENT_LEFT, 250.0, 18, -1, Color.WHITE)
+		if bool(m.get("fail", false)):
+			_t(c, "!", Vector2(bx - 14.0, y + bh * 0.5), 22, Color(1, 0.3, 0.3))
+		y += bh + 8.0
