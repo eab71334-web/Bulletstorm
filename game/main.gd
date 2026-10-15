@@ -4440,8 +4440,8 @@ func apply_gset() -> void:
 	Engine.max_fps = [30, 60, 120][clampi(int(gset["fpscap"]), 0, 2)]
 	if net != null:
 		net.pvp = int(gset["pvp"]) == 1
-		if menu != null and not menu_active:
-			if int(gset["lan"]) == 1 and not net.active and not net_client:
+		if not net_client and not net.connecting:
+			if int(gset["lan"]) == 1 and not net.active:
 				net.start_host()
 			elif int(gset["lan"]) == 0 and net.is_host and net.players.size() <= 1:
 				net.stop_host()
@@ -4828,6 +4828,8 @@ func net_player_joined(id: int, info: Dictionary) -> void:
 	if apps != null:
 		apps.friend_added(id, info)
 	_toast("%s joined the game" % String(info["name"]), 3.0)
+	if menu != null and menu_active:
+		menu.on_lost("%s joined your game" % String(info["name"]))
 
 
 func net_player_left(id: int, nm: String) -> void:
