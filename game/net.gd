@@ -32,6 +32,9 @@ var disc_t := 0.0
 var snap_t := 0.0
 var state_t := 0.0
 
+var scanning := false
+var scan_t := 0.0
+
 var voice_peer := 0
 var cap: AudioEffectCapture
 var mic_player: AudioStreamPlayer
@@ -85,6 +88,51 @@ func _guess_ip() -> String:
 	return best
 
 
+func local_ips() -> Array:
+	var out: Array = []
+	for a in IP.get_local_addresses():
+		var s := String(a)
+		if s.count(".") != 3 or s.begins_with("127.") or s.begins_with("169.254."):
+			continue
+		if s.begins_with("192.168.") or s.begins_with("10.") or s.begins_with("172."):
+			out.append(s)
+	return out
+
+
+func ips_text() -> String:
+	var l := local_ips()
+	if l.is_empty():
+		return lan_ip
+	return ", ".join(PackedStringArray(l))
+
+
+func set_scanning(on: bool) -> void:
+	scanning = on
+	scan_t = 0.0
+
+
+func _send_probes() -> void:
+	var pkt := JSON.stringify({"g": "TOWERWARS", "v": PROTO, "id": sess_id, "q": 1}).to_utf8_buffer()
+	var done := {}
+	var mine := local_ips()
+	for a in mine:
+		var p := String(a).split(".")
+		var base := "%s.%s.%s." % [p[0], p[1], p[2]]
+		if done.has(base):
+			continue
+		done[base] = true
+		for i in range(1, 255):
+			var ip := base + str(i)
+			if mine.has(ip):
+				continue
+			bcast.set_dest_address(ip, DISC_PORT)
+			bcast.put_packet(pkt)
+
+
+func _beacon_bytes() -> PackedByteArray:
+	return JSON.stringify({"g": "TOWERWARS", "v": PROTO, "id": sess_id, "name": String(g.prof["name"]), "n": players.size(), "max": MAX_PLAYERS, "port": GAME_PORT}).to_utf8_buffer()
+
+
 func _bcast_targets() -> Array:
 	var out: Array = ["255.255.255.255"]
 	for a in IP.get_local_addresses():
@@ -136,7 +184,7 @@ func _open_listener() -> void:
 
 
 func _send_beacon() -> void:
-	var pkt := JSON.stringify({"g": "TOWERWARS", "v": PROTO, "id": sess_id, "name": String(g.prof["name"]), "n": players.size(), "max": MAX_PLAYERS, "port": GAME_PORT}).to_utf8_buffer()
+	var pkt := _beacon_bytes()
 	for ip in _bcast_targets():
 		bcast.set_dest_address(String(ip), DISC_PORT)
 		bcast.put_packet(pkt)
@@ -154,6 +202,11 @@ func _poll_discovery() -> void:
 		if String(d.get("g", "")) != "TOWERWARS" or int(d.get("v", 0)) != PROTO:
 			continue
 		if int(d.get("id", 0)) == sess_id:
+			continue
+		if d.has("q"):
+			if is_host and active:
+				bcast.set_dest_address(ip, DISC_PORT)
+				bcast.put_packet(_beacon_bytes())
 			continue
 		found[ip] = {"name": String(d.get("name", "?")), "n": int(d.get("n", 1)), "max": int(d.get("max", MAX_PLAYERS)), "seen": Time.get_ticks_msec()}
 	var now := Time.get_ticks_msec()
@@ -235,6 +288,7 @@ func _fail(msg: String) -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
 	active = false
+	g.call_deferred("apply_gset")
 
 
 func _on_connected() -> void:
@@ -323,6 +377,11 @@ func _process(delta: float) -> void:
 		if disc_t <= 0.0:
 			disc_t = 1.0
 			_send_beacon()
+	if scanning and not connecting and not (active and not is_host):
+		scan_t -= delta
+		if scan_t <= 0.0:
+			scan_t = 2.0
+			_send_probes()
 	if connecting:
 		conn_t += delta
 		if conn_t > 7.0:
