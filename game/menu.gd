@@ -382,7 +382,7 @@ func _build_multi(vp: Vector2) -> void:
 	ip_edit.add_theme_font_size_override("font_size", 32)
 	ip_edit.add_theme_stylebox_override("normal", _sb(Color(1, 1, 1, 0.1), Color(1, 1, 1, 0.3), 14, 2))
 	ip_edit.add_theme_stylebox_override("focus", _sb(Color(1, 1, 1, 0.16), Color(0.3, 0.7, 1.0), 14, 2))
-	ip_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	ip_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_DEFAULT
 	ip_edit.text_submitted.connect(_on_ip_submit)
 	s.add_child(ip_edit)
 	var bj := _btn(_t("join"), Vector2(rw - 60, 76), true, 30)
@@ -443,8 +443,11 @@ func show_screen(n: String) -> void:
 	for k in scr.keys():
 		(scr[k] as Control).visible = (k == n)
 	g.menu_cam = 2 if n == "char" else 1
-	title.visible = n == "main" or n == "multi" or n == "set"
+	title.visible = n == "main"
 	tagline.visible = n == "main"
+	card.visible = n == "main"
+	if g.net != null:
+		g.net.set_scanning(n == "multi")
 	if n == "main":
 		b_play.text = _t("resume") if resumed else _t("play")
 		b_leave.visible = g.net_client
@@ -507,6 +510,8 @@ func start_game() -> void:
 
 
 func _begin() -> void:
+	if g.net != null:
+		g.net.set_scanning(false)
 	resumed = true
 	root.visible = false
 	g.menu_active = false
@@ -639,8 +644,8 @@ func _join(ip: String) -> void:
 func _refresh_multi() -> void:
 	if g.net == null:
 		return
-	ip_lbl.text = "%s: %s" % [_t("yourip"), g.net.lan_ip]
-	host_lbl.text = _t("host") if int(g.gset["lan"]) == 1 else _t("hostoff")
+	ip_lbl.text = "%s: %s" % [_t("yourip"), g.net.ips_text()]
+	host_lbl.text = _t("host") if g.net.is_host and g.net.active else _t("hostoff")
 	var sig := ""
 	for ip in g.net.found.keys():
 		sig += "%s:%s:%s;" % [ip, g.net.found[ip]["name"], g.net.found[ip]["n"]]
