@@ -516,6 +516,7 @@ var menu_cam := 1
 var cam_ease := 0.0
 var cam_look := Vector3.ZERO
 var net_client := false
+var net_autostart := false
 var prof := {}
 var gset := {"pop": 1, "quality": 1, "fpscap": 1, "police": 1, "pvp": 1, "lan": 1, "sens": 1.0}
 var skin_path := GLB_PATH
@@ -4441,7 +4442,7 @@ func apply_gset() -> void:
 	if net != null:
 		net.pvp = int(gset["pvp"]) == 1
 		if not net_client and not net.connecting:
-			if int(gset["lan"]) == 1 and not net.active:
+			if int(gset["lan"]) == 1 and not net.active and net_autostart:
 				net.start_host()
 			elif int(gset["lan"]) == 0 and net.is_host and net.players.size() <= 1:
 				net.stop_host()
