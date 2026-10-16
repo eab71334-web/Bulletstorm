@@ -37,6 +37,8 @@ var last_sig := "x"
 var segs: Dictionary = {}
 var sliders: Dictionary = {}
 var click_snd: AudioStreamPlayer
+var dbg: Label
+var safe_btn: Button
 
 
 func _t(k: String) -> String:
@@ -107,6 +109,19 @@ func _screen(n: String) -> Control:
 	return c
 
 
+func _dbg(t: String) -> void:
+	if dbg != null:
+		dbg.text = "menu build: " + t
+
+
+func _safe_play() -> void:
+	root.visible = false
+	g.menu_active = false
+	g.cam_ease = 1.6
+	g.net_autostart = true
+	g.apply_gset()
+
+
 func _click() -> void:
 	if click_snd != null:
 		click_snd.play()
@@ -138,6 +153,15 @@ func _ready() -> void:
 	add_child(click_snd)
 
 	var vp: Vector2 = g._vp()
+	dbg = _lbl("menu: start", 20, Color(1, 0.6, 0.2))
+	dbg.position = Vector2(30, vp.y - 50)
+	dbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(dbg)
+	safe_btn = _btn("PLAY", Vector2(260, 80), true, 32)
+	safe_btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	safe_btn.position = Vector2(vp.x * 0.5 - 130.0, vp.y - 130.0)
+	safe_btn.pressed.connect(_safe_play)
+	root.add_child(safe_btn)
 	bar_t = ColorRect.new()
 	bar_t.color = Color.BLACK
 	bar_t.size = Vector2(vp.x, 0)
@@ -163,11 +187,17 @@ func _ready() -> void:
 	tagline.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(tagline)
 
+	_dbg("card")
 	_build_card(vp)
+	_dbg("main")
 	_build_main(vp)
+	_dbg("char")
 	_build_char(vp)
+	_dbg("settings")
 	_build_settings(vp)
+	_dbg("multi")
 	_build_multi(vp)
+	_dbg("fade")
 
 	fade = ColorRect.new()
 	fade.color = Color.BLACK
@@ -175,6 +205,9 @@ func _ready() -> void:
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fade)
 	refresh_profile()
+	_dbg("")
+	dbg.visible = false
+	safe_btn.visible = false
 	_intro()
 
 
@@ -436,6 +469,8 @@ func _intro() -> void:
 	await get_tree().create_timer(1.8).timeout
 	intro_done = true
 	show_screen("main")
+	g.net_autostart = true
+	g.apply_gset()
 
 
 func show_screen(n: String) -> void:
@@ -458,6 +493,8 @@ func show_screen(n: String) -> void:
 		_refresh_settings()
 	elif n == "multi":
 		last_sig = "x"
+		g.net_autostart = true
+		g.apply_gset()
 		_refresh_multi()
 	var s: Control = scr[n]
 	var i := 0
