@@ -517,6 +517,8 @@ var cam_ease := 0.0
 var cam_look := Vector3.ZERO
 var net_client := false
 var net_autostart := false
+var menu_t := 0.0
+var menu_checked := false
 var prof := {}
 var gset := {"pop": 1, "quality": 1, "fpscap": 1, "police": 1, "pvp": 1, "lan": 1, "sens": 1.0}
 var skin_path := GLB_PATH
@@ -3283,6 +3285,13 @@ func _process(delta: float) -> void:
 	var rd := delta / maxf(Engine.time_scale, 0.05)
 	ui.visible = not menu_active
 	mini_panel.visible = not menu_active
+	if menu != null and menu_active and not menu_checked:
+		menu_t += delta
+		if menu_t > 7.0:
+			menu_checked = true
+			if not menu.is_ok():
+				menu_active = false
+				_toast("MENU PROBLEM - send me a screenshot\n" + menu.report(), 60.0)
 	_update_msg_edit()
 	var r := _mini_rect()
 	mini_panel.position = r.position
