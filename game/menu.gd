@@ -38,6 +38,8 @@ var segs: Dictionary = {}
 var sliders: Dictionary = {}
 var click_snd: AudioStreamPlayer
 var dbg: Label
+var build_ok := false
+var build_step := ""
 var safe_btn: Button
 
 
@@ -109,7 +111,27 @@ func _screen(n: String) -> Control:
 	return c
 
 
+func report() -> String:
+	var fa := fade.color.a if fade != null else -1.0
+	var pa := b_play.modulate.a if b_play != null else -1.0
+	var rv := "null"
+	if root != null:
+		rv = str(root.visible)
+	return "build_ok=%s\nstep=%s\nintro_done=%s\nroot_visible=%s\nfade_alpha=%.2f\nplay_alpha=%.2f\nscreen=%s" % [str(build_ok), build_step, str(intro_done), rv, fa, pa, cur]
+
+
+func is_ok() -> bool:
+	if not build_ok or not intro_done:
+		return false
+	if cur != "main" and cur != "":
+		return true
+	if not scr.has("main") or fade == null or b_play == null:
+		return false
+	return fade.color.a < 0.1 and b_play.modulate.a > 0.9 and (scr["main"] as Control).visible
+
+
 func _dbg(t: String) -> void:
+	build_step = t
 	if dbg != null:
 		dbg.text = "menu build: " + t
 
@@ -205,7 +227,8 @@ func _ready() -> void:
 	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(fade)
 	refresh_profile()
-	_dbg("")
+	_dbg("done")
+	build_ok = true
 	dbg.visible = false
 	safe_btn.visible = false
 	_intro()
