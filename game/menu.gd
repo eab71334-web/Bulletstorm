@@ -152,15 +152,24 @@ func _click() -> void:
 # ---------------------------------------------------------------- build
 
 func _ready() -> void:
-	if g.apps != null and String(g.apps.lang) == "ar":
+	build_step = "ready-called"
+
+
+func setup() -> void:
+	build_step = "setup-start"
+	var ap = g.get("apps")
+	if ap != null and String(ap.get("lang")) == "ar":
 		lk = "ar"
+	build_step = "lang"
 	layer = CanvasLayer.new()
 	layer.layer = 20
 	add_child(layer)
+	build_step = "layer"
 	root = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(root)
+	build_step = "root"
 	var th := Theme.new()
 	var sf := SystemFont.new()
 	sf.font_names = PackedStringArray(["Geeza Pro", "Noto Sans Arabic", "Arial", "Helvetica"])
@@ -169,10 +178,12 @@ func _ready() -> void:
 	th.default_font = sf
 	th.default_font_size = 26
 	root.theme = th
+	build_step = "theme"
 	click_snd = AudioStreamPlayer.new()
 	click_snd.stream = g._synth_click(1)
 	click_snd.volume_db = -6.0
 	add_child(click_snd)
+	build_step = "sound"
 
 	var vp: Vector2 = g._vp()
 	dbg = _lbl("menu: start", 20, Color(1, 0.6, 0.2))
