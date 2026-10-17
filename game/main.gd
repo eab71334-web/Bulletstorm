@@ -4506,6 +4506,7 @@ func _init_net_menu() -> void:
 		menu.g = self
 		menu.name = "Menu"
 		add_child(menu)
+		menu.setup()
 		menu_active = true
 	apply_gset()
 
