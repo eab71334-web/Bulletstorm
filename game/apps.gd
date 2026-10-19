@@ -1160,11 +1160,6 @@ func _connect_call() -> void:
 			call_msg = T("noanswer")
 
 
-func _end_call() -> void:
-	call_state = ""
-	call_player.stop()
-
-
 func _draw_phone_app(c: Control) -> void:
 	if call_state != "":
 		_draw_call(c)
